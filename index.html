@@ -13,37 +13,129 @@
         h1 { color: #2c3e50; font-size: 22px; text-align: center; }
         .user { font-weight: bold; color: #2980b9; }
         .question { margin: 10px 0; background: #ecf0f1; padding: 10px; border-radius: 8px; }
-        textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin: 5px 0; }
-        button { background: #0088cc; color: white; border: none; padding: 10px 20px; border-radius: 8px; width: 100%; font-size: 16px; }
+        .reply-area { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin: 5px 0; font-family: inherit; }
+        .send-btn { background: #0088cc; color: white; border: none; padding: 10px 20px; border-radius: 8px; width: 100%; font-size: 16px; cursor: pointer; }
+        .send-btn:disabled { background: #95a5a6; cursor: not-allowed; }
         .pending-badge { background: #f39c12; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
         .answered-badge { background: #27ae60; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
+        .reply-text { background: #d5f5e3; padding: 10px; border-radius: 8px; color: #1e8449; margin-top: 10px; }
+        .loader { text-align: center; color: #7f8c8d; padding: 20px; }
+        .error { color: red; text-align: center; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📋 لوحة الاستفسارات</h1>
-        <p style="text-align:center; color:#7f8c8d;">مرحباً أيها المشرف! هذه قائمة الاستفسارات.</p>
-        
-        <!-- نموذج استفسار معلق (Pending) -->
-        <div class="card">
-            <span class="pending-badge">في الانتظار</span>
-            <div class="user">👤 أحمد محمد</div>
-            <div class="question">"كيف يمكنني حفظ الجزء الثلاثين بسهولة؟"</div>
-            <textarea placeholder="اكتب ردك هنا..."></textarea>
-            <button>📤 إرسال الرد</button>
+        <div id="questions-container">
+            <div class="loader">⏳ جاري تحميل الاستفسارات...</div>
         </div>
-
-        <!-- نموذج استفسار تم الرد عليه (Answered) -->
-        <div class="card answered">
-            <span class="answered-badge">تم الرد ✅</span>
-            <div class="user">👤 سارة خالد</div>
-            <div class="question">"متى موعد الاختبار القادم؟"</div>
-            <div style="background:#d5f5e3; padding:10px; border-radius:8px; color:#1e8449;">
-                <strong>الرد:</strong> يوم الأحد القادم الساعة 8 مساءً.
-            </div>
-        </div>
-        
-        <p style="text-align:center; color:#95a5a6; font-size:14px; margin-top:30px;">هذا نموذج أولي، سيتم ربطه بقاعدة البيانات لاحقاً 🚀</p>
     </div>
+
+    <script>
+        // الحصول على معرف المستخدم من تيليجرام
+        const user = window.Telegram.WebApp.initDataUnsafe.user;
+        const adminId = user ? user.id : null;
+
+        // عنوان الخادم (استبدل بـ URL الخاص بك على Render)
+        const BASE_URL = "https://ask-zadbot.onrender.com";
+
+        async function loadQuestions() {
+            const container = document.getElementById('questions-container');
+            
+            if (!adminId) {
+                container.innerHTML = '<div class="error">❌ لم نتمكن من التعرف على حسابك.</div>';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/get_questions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: adminId })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'فشل التحميل');
+                }
+
+                const questions = await response.json();
+                
+                if (questions.length === 0) {
+                    container.innerHTML = '<div class="loader" style="color: #27ae60;">✨ لا توجد استفسارات حالياً</div>';
+                    return;
+                }
+
+                let html = '';
+                for (const q of questions) {
+                    const isAnswered = q.status === 'answered';
+                    const statusClass = isAnswered ? 'answered' : '';
+                    const badge = isAnswered ? '<span class="answered-badge">✅ تم الرد</span>' : '<span class="pending-badge">⏳ في الانتظار</span>';
+                    
+                    html += `
+                        <div class="card ${statusClass}" data-id="${q.id}">
+                            ${badge}
+                            <div class="user">👤 ${q.username || 'مجهول'}</div>
+                            <div class="question">"${q.question}"</div>
+                            ${isAnswered ? `<div class="reply-text"><strong>الرد:</strong> ${q.reply || ''}</div>` : `
+                                <textarea class="reply-area" placeholder="اكتب ردك هنا..." id="reply-${q.id}"></textarea>
+                                <button class="send-btn" onclick="sendReply(${q.id})">📤 إرسال الرد</button>
+                            `}
+                            <div style="font-size:12px; color:#95a5a6; margin-top:5px;">📅 ${q.created_at || ''}</div>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
+
+            } catch (error) {
+                container.innerHTML = `<div class="error">❌ خطأ: ${error.message}</div>`;
+                console.error(error);
+            }
+        }
+
+        async function sendReply(questionId) {
+            const textarea = document.getElementById(`reply-${questionId}`);
+            const replyText = textarea.value.trim();
+            const button = textarea.nextElementSibling;
+
+            if (!replyText) {
+                alert('الرجاء كتابة الرد أولاً');
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = '⏳ جاري الإرسال...';
+
+            try {
+                const response = await fetch(`${BASE_URL}/reply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question_id: questionId,
+                        reply_text: replyText,
+                        admin_id: adminId
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'فشل الإرسال');
+                }
+
+                alert('✅ تم إرسال الرد بنجاح!');
+                // إعادة تحميل القائمة لتحديث الحالة
+                loadQuestions();
+
+            } catch (error) {
+                alert(`❌ فشل الإرسال: ${error.message}`);
+                button.disabled = false;
+                button.textContent = '📤 إرسال الرد';
+            }
+        }
+
+        // تحميل الاستفسارات عند فتح الصفحة
+        document.addEventListener('DOMContentLoaded', loadQuestions);
+    </script>
 </body>
 </html>
