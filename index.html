@@ -21,26 +21,30 @@
         .reply-text { background: #d5f5e3; padding: 10px; border-radius: 8px; color: #1e8449; margin-top: 10px; }
         .loader { text-align: center; color: #7f8c8d; padding: 20px; }
         .error { color: red; text-align: center; }
+        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
+        .delete-btn { background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .delete-btn:disabled { background: #95a5a6; cursor: not-allowed; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📋 لوحة الاستفسارات</h1>
+        <div class="header-actions">
+            <h1>📋 لوحة الاستفسارات</h1>
+            <button class="delete-btn" id="deleteBtn" onclick="deleteAnswered()">🗑️ حذف التي تم الرد عليها</button>
+        </div>
         <div id="questions-container">
             <div class="loader">⏳ جاري تحميل الاستفسارات...</div>
         </div>
     </div>
 
     <script>
-        // الحصول على معرف المستخدم من تيليجرام
         const user = window.Telegram.WebApp.initDataUnsafe.user;
         const adminId = user ? user.id : null;
-
-        // عنوان الخادم (استبدل بـ URL الخاص بك على Render)
-        const BASE_URL = "https://ask-zadbot.onrender.com";
+        const BASE_URL = "https://ask-zadbot.onrender.com"; // ⚠️ استبدل هذا بالرابط الصحيح
 
         async function loadQuestions() {
             const container = document.getElementById('questions-container');
+            const deleteBtn = document.getElementById('deleteBtn');
             
             if (!adminId) {
                 container.innerHTML = '<div class="error">❌ لم نتمكن من التعرف على حسابك.</div>';
@@ -60,6 +64,8 @@
                 }
 
                 const questions = await response.json();
+                const hasAnswered = questions.some(q => q.status === 'answered');
+                deleteBtn.style.display = hasAnswered ? 'block' : 'none';
                 
                 if (questions.length === 0) {
                     container.innerHTML = '<div class="loader" style="color: #27ae60;">✨ لا توجد استفسارات حالياً</div>';
@@ -124,7 +130,6 @@
                 }
 
                 alert('✅ تم إرسال الرد بنجاح!');
-                // إعادة تحميل القائمة لتحديث الحالة
                 loadQuestions();
 
             } catch (error) {
@@ -134,7 +139,38 @@
             }
         }
 
-        // تحميل الاستفسارات عند فتح الصفحة
+        async function deleteAnswered() {
+            if (!confirm('⚠️ هل أنت متأكد من حذف جميع الاستفسارات التي تم الرد عليها؟\nهذا الإجراء لا يمكن التراجع عنه.')) {
+                return;
+            }
+
+            const deleteBtn = document.getElementById('deleteBtn');
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = '⏳ جاري الحذف...';
+
+            try {
+                const response = await fetch(`${BASE_URL}/delete_answered`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_id: adminId })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'فشل الحذف');
+                }
+
+                alert(`✅ تم حذف ${result.deleted} استفسار بنجاح!`);
+                loadQuestions();
+
+            } catch (error) {
+                alert(`❌ فشل الحذف: ${error.message}`);
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = '🗑️ حذف التي تم الرد عليها';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', loadQuestions);
     </script>
 </body>
