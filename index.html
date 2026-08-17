@@ -10,7 +10,7 @@
         .container { max-width: 600px; margin: auto; }
         .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-right: 5px solid #f39c12; }
         .card.answered { border-right-color: #27ae60; }
-        .card.processing { border-right-color: #3498db; opacity: 0.8; }
+        .card.processing { border-right-color: #3498db; opacity: 0.9; }
         h1 { color: #2c3e50; font-size: 22px; margin: 0; }
         .user { font-weight: bold; color: #2980b9; }
         .question { margin: 10px 0; background: #ecf0f1; padding: 10px; border-radius: 8px; }
@@ -18,8 +18,10 @@
         .reply-area:disabled { background: #ecf0f1; color: #7f8c8d; cursor: not-allowed; }
         .send-btn { background: #0088cc; color: white; border: none; padding: 10px 20px; border-radius: 8px; width: 100%; font-size: 16px; cursor: pointer; margin-top: 5px; }
         .send-btn:disabled { background: #95a5a6; cursor: not-allowed; }
-        .assign-btn { background: #f39c12; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 14px; margin-right: 10px; }
+        .assign-btn { background: #f39c12; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
         .assign-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+        .unassign-btn { background: #e67e22; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .unassign-btn:disabled { background: #95a5a6; cursor: not-allowed; }
         .pending-badge { background: #f39c12; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
         .answered-badge { background: #27ae60; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
         .processing-badge { background: #3498db; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
@@ -43,7 +45,7 @@
         .stats-answered { color: #27ae60; }
         .stats-total { color: #2980b9; }
 
-        .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 5px 0; }
     </style>
 </head>
 <body>
@@ -151,13 +153,20 @@
                         badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج هذا السؤال</span>' : '<span class="pending-badge">⏳ في الانتظار</span>';
                         cardClass = isMyProcessing ? 'processing' : '';
                         
-                        const assignBtnHtml = !isMyProcessing ? `
-                            <button class="assign-btn" onclick="assignQuestion(${q.id})">🔄 تولي الرد</button>
-                        ` : '';
+                        let actionsHtml = '';
+                        if (isMyProcessing) {
+                            actionsHtml = `
+                                <button class="unassign-btn" onclick="unassignQuestion(${q.id})">↩️ إلغاء التولي</button>
+                            `;
+                        } else {
+                            actionsHtml = `
+                                <button class="assign-btn" onclick="assignQuestion(${q.id})">🔄 تولي الرد</button>
+                            `;
+                        }
 
                         contentHtml = `
                             <div class="actions">
-                                ${assignBtnHtml}
+                                ${actionsHtml}
                             </div>
                             <textarea class="reply-area" placeholder="اكتب ردك هنا..." id="reply-${q.id}" ${isMyProcessing ? '' : 'disabled'}>${q._tempText || ''}</textarea>
                             <button class="send-btn" onclick="sendReply(${q.id})" ${isMyProcessing ? '' : 'disabled'}>📤 إرسال الرد</button>
@@ -185,7 +194,7 @@
             }
         }
 
-        // ✅ دالة الإسناد عبر زر "تولي الرد"
+        // ✅ تولي الرد (بدون رسالة تأكيد)
         async function assignQuestion(questionId) {
             try {
                 const response = await fetch(`${BASE_URL}/assign`, {
@@ -203,8 +212,8 @@
                     return;
                 }
 
-                alert('✅ تم تولي هذا السؤال، يمكنك الآن كتابة الرد.');
-                loadQuestions(); // إعادة تحميل القائمة لتحديث الحالة
+                // ✅ تحديث مباشر بدون رسالة تأكيد
+                loadQuestions();
 
             } catch (error) {
                 alert(`❌ فشل تولي الرد: ${error.message}`);
@@ -212,6 +221,34 @@
             }
         }
 
+        // ✅ إلغاء التولي (بدون رسالة تأكيد)
+        async function unassignQuestion(questionId) {
+            try {
+                const response = await fetch(`${BASE_URL}/unassign`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question_id: questionId,
+                        admin_id: adminId
+                    })
+                });
+                const result = await response.json();
+
+                if (!response.ok) {
+                    alert(`❌ فشل إلغاء التولي: ${result.error || 'خطأ غير معروف'}`);
+                    return;
+                }
+
+                // ✅ تحديث مباشر بدون رسالة تأكيد
+                loadQuestions();
+
+            } catch (error) {
+                alert(`❌ فشل إلغاء التولي: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        // ✅ إرسال الرد (بدون رسالة تأكيد)
         async function sendReply(questionId) {
             const textarea = document.getElementById(`reply-${questionId}`);
             const replyText = textarea.value.trim();
@@ -242,7 +279,7 @@
                     throw new Error(result.error || 'فشل الإرسال');
                 }
 
-                alert('✅ تم إرسال الرد بنجاح!');
+                // ✅ تحديث مباشر بدون رسالة تأكيد
                 loadQuestions();
 
             } catch (error) {
