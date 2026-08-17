@@ -10,6 +10,7 @@
         .container { max-width: 600px; margin: auto; }
         .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-right: 5px solid #f39c12; }
         .card.answered { border-right-color: #27ae60; }
+        .card.processing { border-right-color: #3498db; opacity: 0.8; }
         h1 { color: #2c3e50; font-size: 22px; margin: 0; }
         .user { font-weight: bold; color: #2980b9; }
         .question { margin: 10px 0; background: #ecf0f1; padding: 10px; border-radius: 8px; }
@@ -18,19 +19,21 @@
         .send-btn:disabled { background: #95a5a6; cursor: not-allowed; }
         .pending-badge { background: #f39c12; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
         .answered-badge { background: #27ae60; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
+        .processing-badge { background: #3498db; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
         .reply-text { background: #d5f5e3; padding: 10px; border-radius: 8px; color: #1e8449; margin-top: 10px; }
+        .processing-text { background: #d6eaf8; padding: 10px; border-radius: 8px; color: #1a5276; margin-top: 10px; text-align: center; }
         .loader { text-align: center; color: #7f8c8d; padding: 20px; }
         .error { color: red; text-align: center; }
         
-        /* header جديد */
+        /* تنسيق الأزرار الجديد */
         .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
         .header-left { display: flex; align-items: center; gap: 10px; }
+        .header-right { display: flex; align-items: center; gap: 10px; }
         .refresh-btn { background: #2ecc71; color: white; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; }
         .refresh-btn:disabled { background: #95a5a6; cursor: not-allowed; }
         .delete-btn { background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 14px; }
         .delete-btn:disabled { background: #95a5a6; cursor: not-allowed; }
         
-        /* عداد سريع */
         .stats-bar { background: #ecf0f1; border-radius: 10px; padding: 10px 15px; margin-bottom: 15px; display: flex; justify-content: space-around; text-align: center; font-size: 14px; }
         .stats-bar span { font-weight: bold; }
         .stats-pending { color: #f39c12; }
@@ -43,15 +46,16 @@
         <div class="header-actions">
             <div class="header-left">
                 <h1>📋 لوحة الاستفسارات</h1>
-                <!-- ✅ زر التحديث الجديد -->
                 <button class="refresh-btn" id="refreshBtn" onclick="loadQuestions()">🔄 تحديث</button>
             </div>
-            <button class="delete-btn" id="deleteBtn" onclick="deleteAnswered()">🗑️ حذف الأسئلة التي تم الرد عليها</button>
+            <div class="header-right">
+                <button class="delete-btn" id="deleteBtn" onclick="deleteAnswered()">🗑️ حذف الأسئلة التي تم الرد عليها</button>
+            </div>
         </div>
 
-        <!-- ✅ عداد سريع -->
         <div class="stats-bar" id="statsBar">
             <div>⏳ في الانتظار: <span class="stats-pending" id="pendingCount">0</span></div>
+            <div>🔄 قيد المعالجة: <span class="stats-pending" id="processingCount">0</span></div>
             <div>✅ تم الرد: <span class="stats-answered" id="answeredCount">0</span></div>
             <div>📊 المجموع: <span class="stats-total" id="totalCount">0</span></div>
         </div>
@@ -95,10 +99,12 @@
 
                 const questions = await response.json();
                 
-                // ✅ تحديث العداد السريع
+                // تحديث العداد
                 const pending = questions.filter(q => q.status === 'pending').length;
+                const processing = questions.filter(q => q.status === 'processing').length;
                 const answered = questions.filter(q => q.status === 'answered').length;
                 document.getElementById('pendingCount').textContent = pending;
+                document.getElementById('processingCount').textContent = processing;
                 document.getElementById('answeredCount').textContent = answered;
                 document.getElementById('totalCount').textContent = questions.length;
 
@@ -115,18 +121,41 @@
                 let html = '';
                 for (const q of questions) {
                     const isAnswered = q.status === 'answered';
-                    const statusClass = isAnswered ? 'answered' : '';
-                    const badge = isAnswered ? '<span class="answered-badge">✅ تم الرد</span>' : '<span class="pending-badge">⏳ في الانتظار</span>';
+                    const isProcessing = q.status === 'processing';
+                    const isAssignedToMe = isProcessing && q.assigned_to == adminId;
+                    const isAssignedToOther = isProcessing && !isAssignedToMe;
                     
+                    let badge = '';
+                    let cardClass = '';
+                    let contentHtml = '';
+
+                    if (isAnswered) {
+                        badge = '<span class="answered-badge">✅ تم الرد</span>';
+                        cardClass = 'answered';
+                        contentHtml = `
+                            <div class="reply-text"><strong>الرد:</strong> ${q.reply || ''}</div>
+                        `;
+                    } else if (isAssignedToOther) {
+                        badge = '<span class="processing-badge">🔄 قيد المعالجة</span>';
+                        cardClass = 'processing';
+                        contentHtml = `
+                            <div class="processing-text">⏳ هذا الاستفسار قيد المعالجة من قبل أحد المشرفين.</div>
+                        `;
+                    } else { // pending أو processing للمشرف نفسه
+                        badge = isProcessing ? '<span class="processing-badge">🔄 أنت تعالج هذا السؤال</span>' : '<span class="pending-badge">⏳ في الانتظار</span>';
+                        cardClass = isProcessing ? 'processing' : '';
+                        contentHtml = `
+                            <textarea class="reply-area" placeholder="اكتب ردك هنا..." id="reply-${q.id}" onfocus="assignQuestion(${q.id})"></textarea>
+                            <button class="send-btn" onclick="sendReply(${q.id})">📤 إرسال الرد</button>
+                        `;
+                    }
+
                     html += `
-                        <div class="card ${statusClass}" data-id="${q.id}">
+                        <div class="card ${cardClass}" data-id="${q.id}">
                             ${badge}
                             <div class="user">👤 ${q.username || 'مجهول'}</div>
                             <div class="question">"${q.question}"</div>
-                            ${isAnswered ? `<div class="reply-text"><strong>الرد:</strong> ${q.reply || ''}</div>` : `
-                                <textarea class="reply-area" placeholder="اكتب ردك هنا..." id="reply-${q.id}"></textarea>
-                                <button class="send-btn" onclick="sendReply(${q.id})">📤 إرسال الرد</button>
-                            `}
+                            ${contentHtml}
                             <div style="font-size:12px; color:#95a5a6; margin-top:5px;">📅 ${q.created_at || ''}</div>
                         </div>
                     `;
@@ -139,6 +168,30 @@
             } finally {
                 refreshBtn.disabled = false;
                 refreshBtn.textContent = '🔄 تحديث';
+            }
+        }
+
+        // دالة إسناد السؤال للمشرف الحالي
+        async function assignQuestion(questionId) {
+            try {
+                // نرسل طلب إسناد فقط إذا كان السؤال لا يزال pending (نتجنب الإسناد المتكرر)
+                const response = await fetch(`${BASE_URL}/assign`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question_id: questionId,
+                        admin_id: adminId
+                    })
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    console.warn("فشل الإسناد:", result.error);
+                } else {
+                    // إعادة تحميل القائمة لتحديث حالة السؤال
+                    loadQuestions();
+                }
+            } catch (error) {
+                console.error("خطأ في الإسناد:", error);
             }
         }
 
