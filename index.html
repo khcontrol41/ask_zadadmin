@@ -15,6 +15,7 @@
         .user { font-weight: bold; color: #2980b9; }
         .question { margin: 10px 0; background: #ecf0f1; padding: 10px; border-radius: 8px; }
         .reply-area { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin: 5px 0; font-family: inherit; }
+        .reply-area:disabled { background: #ecf0f1; color: #7f8c8d; cursor: not-allowed; }
         .send-btn { background: #0088cc; color: white; border: none; padding: 10px 20px; border-radius: 8px; width: 100%; font-size: 16px; cursor: pointer; }
         .send-btn:disabled { background: #95a5a6; cursor: not-allowed; }
         .pending-badge { background: #f39c12; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
@@ -25,7 +26,6 @@
         .loader { text-align: center; color: #7f8c8d; padding: 20px; }
         .error { color: red; text-align: center; }
         
-        /* تنسيق الأزرار الجديد */
         .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
         .header-left { display: flex; align-items: center; gap: 10px; }
         .header-right { display: flex; align-items: center; gap: 10px; }
@@ -34,9 +34,10 @@
         .delete-btn { background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 14px; }
         .delete-btn:disabled { background: #95a5a6; cursor: not-allowed; }
         
-        .stats-bar { background: #ecf0f1; border-radius: 10px; padding: 10px 15px; margin-bottom: 15px; display: flex; justify-content: space-around; text-align: center; font-size: 14px; }
+        .stats-bar { background: #ecf0f1; border-radius: 10px; padding: 10px 15px; margin-bottom: 15px; display: flex; justify-content: space-around; text-align: center; font-size: 14px; flex-wrap: wrap; gap: 5px; }
         .stats-bar span { font-weight: bold; }
         .stats-pending { color: #f39c12; }
+        .stats-processing { color: #3498db; }
         .stats-answered { color: #27ae60; }
         .stats-total { color: #2980b9; }
     </style>
@@ -55,7 +56,7 @@
 
         <div class="stats-bar" id="statsBar">
             <div>⏳ في الانتظار: <span class="stats-pending" id="pendingCount">0</span></div>
-            <div>🔄 قيد المعالجة: <span class="stats-pending" id="processingCount">0</span></div>
+            <div>🔄 قيد المعالجة: <span class="stats-processing" id="processingCount">0</span></div>
             <div>✅ تم الرد: <span class="stats-answered" id="answeredCount">0</span></div>
             <div>📊 المجموع: <span class="stats-total" id="totalCount">0</span></div>
         </div>
@@ -145,7 +146,7 @@
                         badge = isProcessing ? '<span class="processing-badge">🔄 أنت تعالج هذا السؤال</span>' : '<span class="pending-badge">⏳ في الانتظار</span>';
                         cardClass = isProcessing ? 'processing' : '';
                         contentHtml = `
-                            <textarea class="reply-area" placeholder="اكتب ردك هنا..." id="reply-${q.id}" onfocus="assignQuestion(${q.id})"></textarea>
+                            <textarea class="reply-area" placeholder="اكتب ردك هنا..." id="reply-${q.id}" onfocus="assignQuestion(${q.id})">${q._tempText || ''}</textarea>
                             <button class="send-btn" onclick="sendReply(${q.id})">📤 إرسال الرد</button>
                         `;
                     }
@@ -171,10 +172,18 @@
             }
         }
 
-        // دالة إسناد السؤال للمشرف الحالي
+        // ✅ دالة الإسناد المُحسَّنة (تحديث محلي بدون فقدان النص)
         async function assignQuestion(questionId) {
+            // 1. العثور على العناصر في DOM
+            const textarea = document.getElementById(`reply-${questionId}`);
+            if (!textarea) return;
+
+            // 2. حفظ النص الحالي لحمايته (نحتفظ به في المتغير)
+            const currentText = textarea.value;
+
+            // 3. نرسل طلب الإسناد فقط إذا كان السؤال لا يزال pending
+            // نستخدم طلب POST مع محاولة وحيدة
             try {
-                // نرسل طلب إسناد فقط إذا كان السؤال لا يزال pending (نتجنب الإسناد المتكرر)
                 const response = await fetch(`${BASE_URL}/assign`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -184,14 +193,72 @@
                     })
                 });
                 const result = await response.json();
+
                 if (!response.ok) {
+                    // إذا فشل الإسناد (مثل تم إسناده من قبل آخر)، نعيد تحميل القائمة للحصول على الحالة الصحيحة
                     console.warn("فشل الإسناد:", result.error);
-                } else {
-                    // إعادة تحميل القائمة لتحديث حالة السؤال
                     loadQuestions();
+                    return;
                 }
+
+                // ✅ نجاح الإسناد: نقوم بتحديث الواجهة محلياً (دون إعادة تحميل)
+                const card = textarea.closest('.card');
+                const button = card.querySelector('.send-btn');
+                
+                // تعطيل الـ textarea والزر
+                textarea.disabled = true;
+                textarea.style.background = '#ecf0f1';
+                textarea.style.color = '#7f8c8d';
+                button.disabled = true;
+                button.textContent = '⏳ قيد المعالجة';
+
+                // تحديث العلامة (badge)
+                const oldBadge = card.querySelector('.pending-badge, .processing-badge, .answered-badge');
+                if (oldBadge) oldBadge.remove();
+                
+                const newBadge = document.createElement('span');
+                newBadge.className = 'processing-badge';
+                newBadge.textContent = '🔄 أنت تعالج هذا السؤال';
+                card.prepend(newBadge);
+
+                // تحديث لون الحدود
+                card.style.borderRightColor = '#3498db';
+                card.classList.add('processing');
+
+                // تحديث العداد المحلي (زيادة عدد المعالجة، تقليل عدد المعلّق)
+                const pendingSpan = document.getElementById('pendingCount');
+                const processingSpan = document.getElementById('processingCount');
+                let pendingCount = parseInt(pendingSpan.textContent) || 0;
+                let processingCount = parseInt(processingSpan.textContent) || 0;
+                if (pendingCount > 0) pendingCount--;
+                processingCount++;
+                pendingSpan.textContent = pendingCount;
+                processingSpan.textContent = processingCount;
+
+                // ❗ لا نقوم بإعادة تحميل القائمة، بل نترك المستخدم يكتب ردّه في الـ textarea المعطل (ولكنه معطل!)
+                // انتظر، إذا عطلنا textarea، لن يتمكن من كتابة الرد. هذا عكس ما نريد!
+                // نحتاج إلى إبقاء الـ textarea مفعلاً حتى يتمكن من كتابة الرد، ولكن مع إضافة علامة "قيد المعالجة".
+                
+                // ✅ تصحيح: نترك textarea مفعلاً (disabled=false) ونغير لونه قليلاً فقط
+                textarea.disabled = false;
+                textarea.style.background = '#fff';
+                textarea.style.color = '#000';
+                button.disabled = false;
+                button.textContent = '📤 إرسال الرد';
+                // نعيد النص الذي تم حفظه
+                textarea.value = currentText;
+
+                // نضيف نص توضيحي في الأعلى أنه مسند له
+                const note = document.createElement('div');
+                note.style.cssText = 'background:#d6eaf8; padding:8px; border-radius:8px; margin-bottom:10px; color:#1a5276; font-size:14px;';
+                note.textContent = '🔒 أنت المسؤول عن هذا السؤال. أرسل الرد مباشرة.';
+                // نضيفه قبل الـ textarea
+                textarea.parentNode.insertBefore(note, textarea);
+
             } catch (error) {
                 console.error("خطأ في الإسناد:", error);
+                // في حالة خطأ شبكة، نعيد التحميل للتعافي
+                loadQuestions();
             }
         }
 
