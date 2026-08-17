@@ -13,6 +13,8 @@
         .card.processing { border-right-color: #3498db; opacity: 0.9; }
         h1 { color: #2c3e50; font-size: 22px; margin: 0; }
         .user { font-weight: bold; color: #2980b9; }
+        .user a { color: #2980b9; text-decoration: none; }
+        .user a:hover { text-decoration: underline; }
         .question { margin: 10px 0; background: #ecf0f1; padding: 10px; border-radius: 8px; }
         .reply-area { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin: 5px 0; font-family: inherit; }
         .reply-area:disabled { background: #ecf0f1; color: #7f8c8d; cursor: not-allowed; }
@@ -95,6 +97,7 @@
         </div>
     </div>
 
+    <!-- Modal -->
     <div class="modal-overlay" id="bulkModal">
         <div class="modal-box">
             <h2>📨 الرد الجماعي</h2>
@@ -115,6 +118,14 @@
         
         let currentQuestions = [];
         let selectedIds = new Set();
+
+        // ✅ دالة مساعدة لإنشاء رابط المستخدم (الميزة الجديدة)
+        function formatUsername(username) {
+            if (!username || username === "مجهول") {
+                return '👤 مجهول';
+            }
+            return `👤 <a href="https://t.me/${username}" target="_blank" title="اضغط للتواصل مع المستخدم">${username}</a>`;
+        }
 
         async function loadQuestions() {
             const container = document.getElementById('questions-container');
@@ -179,6 +190,9 @@
                     let cardClass = '';
                     let contentHtml = '';
 
+                    // ✅ عرض اسم المستخدم كرابط
+                    const userDisplay = formatUsername(q.username);
+
                     if (isAnswered) {
                         badge = '<span class="answered-badge">✅ تم الرد</span>';
                         cardClass = 'answered';
@@ -224,7 +238,7 @@
                     html += `
                         <div class="card ${cardClass}" data-id="${q.id}">
                             ${badge}
-                            <div class="user">👤 ${q.username || 'مجهول'}</div>
+                            <div class="user">${userDisplay}</div>
                             <div class="question">"${q.question}"</div>
                             ${contentHtml}
                             <div style="font-size:12px; color:#95a5a6; margin-top:5px;">📅 ${q.created_at || ''}</div>
@@ -242,6 +256,7 @@
             }
         }
 
+        // --- باقي الدوال (بدون تغيير) ---
         function toggleSelect(questionId) {
             const cb = document.getElementById(`cb-${questionId}`);
             if (cb.checked) {
@@ -437,9 +452,6 @@
             }
         }
 
-        // ============================================
-        // ✅ الدالة المعدلة (مع finally)
-        // ============================================
         async function deleteAnswered() {
             if (!confirm('⚠️ هل أنت متأكد من حذف جميع الاستفسارات التي تم الرد عليها؟')) {
                 return;
@@ -463,14 +475,13 @@
                 }
 
                 alert(`✅ تم حذف ${result.deleted} استفسار بنجاح!`);
-                await loadQuestions();
+                loadQuestions();
 
             } catch (error) {
                 alert(`❌ فشل الحذف: ${error.message}`);
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = '🗑️ حذف التي تم الرد عليها';
             } finally {
-                // ✅ في جميع الأحوال (نجاح أو فشل)، نعيد تمكين الزر
-                // في حالة النجاح، loadQuestions ستعيد إنشاء الزر، لكن هذا السطر لا يضر.
-                // في حالة الفشل، يضمن عودة الزر لوضعه الطبيعي.
                 const btn = document.getElementById('deleteBtn');
                 if (btn) {
                     btn.disabled = false;
