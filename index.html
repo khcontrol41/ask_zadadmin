@@ -30,7 +30,8 @@
     <div class="container">
         <div class="header-actions">
             <h1>📋 لوحة الاستفسارات</h1>
-            <button class="delete-btn" id="deleteBtn" onclick="deleteAnswered()">🗑️ حذف التي تم الرد عليها</button>
+            <!-- ✅ النص الجديد (رقم 16) -->
+            <button class="delete-btn" id="deleteBtn" onclick="deleteAnswered()">🗑️ حذف الأسئلة التي تم الرد عليها</button>
         </div>
         <div id="questions-container">
             <div class="loader">⏳ جاري تحميل الاستفسارات...</div>
@@ -140,7 +141,8 @@
         }
 
         async function deleteAnswered() {
-            if (!confirm('⚠️ هل أنت متأكد من حذف جميع الاستفسارات التي تم الرد عليها؟\nهذا الإجراء لا يمكن التراجع عنه.')) {
+            // ✅ النص الجديد (رقم 19)
+            if (!confirm('⚠️ هل أنت متأكد من حذف جميع الاستفسارات التي تم الرد عليها؟')) {
                 return;
             }
 
@@ -167,7 +169,7 @@
             } catch (error) {
                 alert(`❌ فشل الحذف: ${error.message}`);
                 deleteBtn.disabled = false;
-                deleteBtn.textContent = '🗑️ حذف التي تم الرد عليها';
+                deleteBtn.textContent = '🗑️ حذف الأسئلة التي تم الرد عليها';
             }
         }
 
