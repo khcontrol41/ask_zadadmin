@@ -1,321 +1,220 @@
-import os
-import logging
-import asyncio
-import threading
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
-import asyncpg
-
-# --- 1. الإعدادات الأساسية ---
-TOKEN = os.environ.get("BOT_TOKEN")
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-if not TOKEN:
-    raise ValueError("لم يتم تعيين متغير البيئة BOT_TOKEN")
-if not DATABASE_URL:
-    raise ValueError("لم يتم تعيين متغير البيئة DATABASE_URL")
-
-ADMIN_IDS = [5387087412]  # ⚠️ ضع رقمك هنا
-
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
-
-# --- 2. حلقة أحداث ثابتة ---
-main_loop = asyncio.new_event_loop()
-asyncio.set_event_loop(main_loop)
-
-# --- 3. تهيئة Flask ---
-app = Flask(__name__)
-CORS(app)
-
-bot_app = None
-
-@app.route('/')
-def home():
-    return "البوت يعمل! ✅"
-
-@app.route('/health')
-def health():
-    return "OK"
-
-# --- نقاط النهاية للواجهة (API) ---
-@app.route('/get_questions', methods=['POST'])
-def get_questions():
-    try:
-        data = request.get_json()
-        user_id = data.get('user_id')
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة استفسارات المقرأة</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; padding: 15px; background: #f4f7fa; }
+        .container { max-width: 600px; margin: auto; }
+        .card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-right: 5px solid #f39c12; }
+        .card.answered { border-right-color: #27ae60; }
+        h1 { color: #2c3e50; font-size: 22px; margin: 0; }
+        .user { font-weight: bold; color: #2980b9; }
+        .question { margin: 10px 0; background: #ecf0f1; padding: 10px; border-radius: 8px; }
+        .reply-area { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin: 5px 0; font-family: inherit; }
+        .send-btn { background: #0088cc; color: white; border: none; padding: 10px 20px; border-radius: 8px; width: 100%; font-size: 16px; cursor: pointer; }
+        .send-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+        .pending-badge { background: #f39c12; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
+        .answered-badge { background: #27ae60; color: white; padding: 2px 10px; border-radius: 20px; font-size: 12px; }
+        .reply-text { background: #d5f5e3; padding: 10px; border-radius: 8px; color: #1e8449; margin-top: 10px; }
+        .loader { text-align: center; color: #7f8c8d; padding: 20px; }
+        .error { color: red; text-align: center; }
         
-        if user_id not in ADMIN_IDS:
-            return jsonify({"error": "غير مصرح"}), 403
+        /* header جديد */
+        .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
+        .header-left { display: flex; align-items: center; gap: 10px; }
+        .refresh-btn { background: #2ecc71; color: white; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .refresh-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+        .delete-btn { background: #e74c3c; color: white; border: none; padding: 8px 15px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+        .delete-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+        
+        /* عداد سريع */
+        .stats-bar { background: #ecf0f1; border-radius: 10px; padding: 10px 15px; margin-bottom: 15px; display: flex; justify-content: space-around; text-align: center; font-size: 14px; }
+        .stats-bar span { font-weight: bold; }
+        .stats-pending { color: #f39c12; }
+        .stats-answered { color: #27ae60; }
+        .stats-total { color: #2980b9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-actions">
+            <div class="header-left">
+                <h1>📋 لوحة الاستفسارات</h1>
+                <!-- ✅ زر التحديث الجديد -->
+                <button class="refresh-btn" id="refreshBtn" onclick="loadQuestions()">🔄 تحديث</button>
+            </div>
+            <button class="delete-btn" id="deleteBtn" onclick="deleteAnswered()">🗑️ حذف الأسئلة التي تم الرد عليها</button>
+        </div>
 
-        async def fetch_questions():
-            conn = await asyncpg.connect(DATABASE_URL)
-            try:
-                await conn.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS reply TEXT;")
-                rows = await conn.fetch("""
-                    SELECT id, user_id, username, question, status, reply, created_at 
-                    FROM questions 
-                    ORDER BY created_at DESC
-                """)
-                return [dict(row) for row in rows]
-            finally:
-                await conn.close()
-        
-        questions = main_loop.run_until_complete(fetch_questions())
-        
-        for q in questions:
-            q['created_at'] = q['created_at'].isoformat() if q['created_at'] else None
+        <!-- ✅ عداد سريع -->
+        <div class="stats-bar" id="statsBar">
+            <div>⏳ في الانتظار: <span class="stats-pending" id="pendingCount">0</span></div>
+            <div>✅ تم الرد: <span class="stats-answered" id="answeredCount">0</span></div>
+            <div>📊 المجموع: <span class="stats-total" id="totalCount">0</span></div>
+        </div>
+
+        <div id="questions-container">
+            <div class="loader">⏳ جاري تحميل الاستفسارات...</div>
+        </div>
+    </div>
+
+    <script>
+        const user = window.Telegram.WebApp.initDataUnsafe.user;
+        const adminId = user ? user.id : null;
+        const BASE_URL = "https://ask-zadbot.onrender.com"; // ⚠️ استبدل هذا بالرابط الصحيح
+
+        async function loadQuestions() {
+            const container = document.getElementById('questions-container');
+            const deleteBtn = document.getElementById('deleteBtn');
+            const refreshBtn = document.getElementById('refreshBtn');
             
-        return jsonify(questions), 200
-        
-    except Exception as e:
-        logging.error(f"خطأ في جلب الأسئلة: {e}")
-        return jsonify({"error": str(e)}), 500
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = '⏳ جاري...';
 
-@app.route('/reply', methods=['POST'])
-def reply_question():
-    try:
-        data = request.get_json()
-        question_id = data.get('question_id')
-        reply_text = data.get('reply_text')
-        admin_id = data.get('admin_id')
-        
-        if admin_id not in ADMIN_IDS:
-            return jsonify({"error": "غير مصرح"}), 403
-            
-        if not question_id or not reply_text:
-            return jsonify({"error": "بيانات ناقصة"}), 400
-            
-        async def update_and_send():
-            conn = await asyncpg.connect(DATABASE_URL)
-            try:
-                await conn.execute("ALTER TABLE questions ADD COLUMN IF NOT EXISTS reply TEXT;")
+            if (!adminId) {
+                container.innerHTML = '<div class="error">❌ لم نتمكن من التعرف على حسابك.</div>';
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '🔄 تحديث';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BASE_URL}/get_questions`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: adminId })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'فشل التحميل');
+                }
+
+                const questions = await response.json();
                 
-                row = await conn.fetchrow("SELECT user_id FROM questions WHERE id = $1", question_id)
-                if not row:
-                    return {"error": "السؤال غير موجود"}
+                // ✅ تحديث العداد السريع
+                const pending = questions.filter(q => q.status === 'pending').length;
+                const answered = questions.filter(q => q.status === 'answered').length;
+                document.getElementById('pendingCount').textContent = pending;
+                document.getElementById('answeredCount').textContent = answered;
+                document.getElementById('totalCount').textContent = questions.length;
+
+                const hasAnswered = answered > 0;
+                deleteBtn.style.display = hasAnswered ? 'block' : 'none';
                 
-                student_id = row['user_id']
-                
-                await conn.execute(
-                    "UPDATE questions SET reply = $1, status = 'answered' WHERE id = $2",
-                    reply_text, question_id
-                )
-                
-                global bot_app
-                if bot_app:
-                    await bot_app.bot.send_message(
-                        chat_id=student_id,
-                        text=f"📩 *تم الرد على استفسارك:*\n\n{reply_text}",
-                        parse_mode="Markdown"
-                    )
-                else:
-                    logging.error("البوت ليس جاهزاً لإرسال الرسائل")
-                    return {"error": "البوت غير جاهز"}
-                
-                return {"success": True}
-                
-            finally:
-                await conn.close()
-        
-        result = main_loop.run_until_complete(update_and_send())
-        
-        if result.get("error"):
-            return jsonify(result), 400
-            
-        return jsonify({"success": True}), 200
-        
-    except Exception as e:
-        logging.error(f"خطأ في الرد: {e}")
-        return jsonify({"error": str(e)}), 500
+                if (questions.length === 0) {
+                    container.innerHTML = '<div class="loader" style="color: #27ae60;">✨ لا توجد استفسارات حالياً</div>';
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = '🔄 تحديث';
+                    return;
+                }
 
-@app.route('/delete_answered', methods=['POST'])
-def delete_answered():
-    try:
-        data = request.get_json()
-        admin_id = data.get('admin_id')
-        
-        if admin_id not in ADMIN_IDS:
-            return jsonify({"error": "غير مصرح"}), 403
-            
-        async def delete_answered_async():
-            conn = await asyncpg.connect(DATABASE_URL)
-            try:
-                result = await conn.execute("DELETE FROM questions WHERE status = 'answered'")
-                import re
-                match = re.search(r'DELETE (\d+)', result)
-                count = int(match.group(1)) if match else 0
-                return {"success": True, "deleted": count}
-            finally:
-                await conn.close()
-        
-        result = main_loop.run_until_complete(delete_answered_async())
-        return jsonify(result), 200
-        
-    except Exception as e:
-        logging.error(f"خطأ في حذف الأسئلة المجاب عليها: {e}")
-        return jsonify({"error": str(e)}), 500
+                let html = '';
+                for (const q of questions) {
+                    const isAnswered = q.status === 'answered';
+                    const statusClass = isAnswered ? 'answered' : '';
+                    const badge = isAnswered ? '<span class="answered-badge">✅ تم الرد</span>' : '<span class="pending-badge">⏳ في الانتظار</span>';
+                    
+                    html += `
+                        <div class="card ${statusClass}" data-id="${q.id}">
+                            ${badge}
+                            <div class="user">👤 ${q.username || 'مجهول'}</div>
+                            <div class="question">"${q.question}"</div>
+                            ${isAnswered ? `<div class="reply-text"><strong>الرد:</strong> ${q.reply || ''}</div>` : `
+                                <textarea class="reply-area" placeholder="اكتب ردك هنا..." id="reply-${q.id}"></textarea>
+                                <button class="send-btn" onclick="sendReply(${q.id})">📤 إرسال الرد</button>
+                            `}
+                            <div style="font-size:12px; color:#95a5a6; margin-top:5px;">📅 ${q.created_at || ''}</div>
+                        </div>
+                    `;
+                }
+                container.innerHTML = html;
 
-# --- 4. دوال البوت الأساسية ---
+            } catch (error) {
+                container.innerHTML = `<div class="error">❌ خطأ: ${error.message}</div>`;
+                console.error(error);
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = '🔄 تحديث';
+            }
+        }
 
-MAIN_KEYBOARD = ReplyKeyboardMarkup(
-    [
-        [KeyboardButton("📩 سؤال جديد"), KeyboardButton("📚 الأسئلة الشائعة")]
-    ],
-    resize_keyboard=True,
-    one_time_keyboard=False
-)
+        async function sendReply(questionId) {
+            const textarea = document.getElementById(`reply-${questionId}`);
+            const replyText = textarea.value.trim();
+            const button = textarea.nextElementSibling;
 
-def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
+            if (!replyText) {
+                alert('الرجاء كتابة الرد أولاً');
+                return;
+            }
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = """
-🌿 أهلاً وسهلاً بكم في مقرأة «زاد الفرقان»
+            button.disabled = true;
+            button.textContent = '⏳ جاري الإرسال...';
 
-​يسرّنا انضمامكم إلينا، ونسأل الله تعالى أن يوفقنا لخدمتكم وأن نكون عونًا لكم في رحلتكم.
-​"يبدأ الطريق بخطوة، وتُقطف ثماره بختمة.. فابدأ مسيرتك، ونحن معك حتى تذوق حلاوة الختمة."
+            try {
+                const response = await fetch(`${BASE_URL}/reply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        question_id: questionId,
+                        reply_text: replyText,
+                        admin_id: adminId
+                    })
+                });
 
-​🫧 الخدمات المتاحة عبر البوت:
-صُمِّم هذا البوت للإجابة عن كافة استفساراتكم حول المقرأة، وتسهيل وصولكم إلى المعلومات التي تحتاجونها بكل يسر، بما في ذلك:
+                const result = await response.json();
 
-​📚 البرامج والمسارات التعليمية
-​🗓️ مواعيد الحلقات واللقاءات
-​📝 إجراءات التسجيل وضوابط الدراسة
-​📖 اللوائح التنظيمية وآلية المتابعة
-​💬 الاستفسارات العامة والخدمات الإدارية
+                if (!response.ok) {
+                    throw new Error(result.error || 'فشل الإرسال');
+                }
 
-📌 يرجى تحديد الخيار المناسب من الأيقونات:
+                alert('✅ تم إرسال الرد بنجاح!');
+                loadQuestions();
 
-​📚 الأسئلة الشائعة — للاطلاع على الإرشادات والإجابات المعتمدة.
-​📩 سؤال جديد — للتواصل المباشر مع الكادر الإشرافي بالمقرأة.
+            } catch (error) {
+                alert(`❌ فشل الإرسال: ${error.message}`);
+                button.disabled = false;
+                button.textContent = '📤 إرسال الرد';
+            }
+        }
 
-​🌱 «لا تتردد في السؤال، فوضوح الطريق يُعين على حسن المسير»
-"""
-    await update.message.reply_text(
-        welcome_text,
-        reply_markup=MAIN_KEYBOARD
-    )
+        async function deleteAnswered() {
+            if (!confirm('⚠️ هل أنت متأكد من حذف جميع الاستفسارات التي تم الرد عليها؟')) {
+                return;
+            }
 
-async def handle_main_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+            const deleteBtn = document.getElementById('deleteBtn');
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = '⏳ جاري الحذف...';
 
-    if text == "📩 سؤال جديد":
-        await update.message.reply_text(
-            "✍️ اكتب سؤالك الآن، وسنقوم بالرد عليه قريباً.",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        context.user_data['waiting_for_question'] = True
+            try {
+                const response = await fetch(`${BASE_URL}/delete_answered`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ admin_id: adminId })
+                });
 
-    elif text == "📚 الأسئلة الشائعة":
-        faq_text = """
-أهلاً بكم.. نعمل حالياً على تحديث قسم الأسئلة الشائعة وستُتاح قريبا بإذن الله. وفي حال كان لديكم أي سؤال، يمكنكم التواصل مع المشرفين مباشرة بالضغط على (📩 سؤال جديد).
-"""
-        await update.message.reply_text(
-            faq_text,
-            reply_markup=MAIN_KEYBOARD
-        )
-        context.user_data['waiting_for_question'] = False
+                const result = await response.json();
 
-async def handle_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    username = update.effective_user.username or "مجهول"
-    question_text = update.message.text
+                if (!response.ok) {
+                    throw new Error(result.error || 'فشل الحذف');
+                }
 
-    if not context.user_data.get('waiting_for_question'):
-        await update.message.reply_text(
-            "❌ يُرجى استخدام الأيقونات الظاهرة أدناه لاختيار الخدمة المناسبة:\n\n"
-            "☜  اضغط \"📩 سؤال جديد\" للتواصل المباشر مع مشرفي المقرأة وطرح سؤالك\n\n"
-            "☜ اضغط \"📚 الأسئلة الشائعة\" للاستفادة من أكثر ما يُطرح من استفسارات",
-            reply_markup=MAIN_KEYBOARD
-        )
-        return
+                alert(`✅ تم حذف ${result.deleted} استفسار بنجاح!`);
+                loadQuestions();
 
-    try:
-        conn = await asyncpg.connect(DATABASE_URL)
-        try:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS questions (
-                    id SERIAL PRIMARY KEY, 
-                    user_id BIGINT, 
-                    username TEXT, 
-                    question TEXT, 
-                    status TEXT DEFAULT 'pending', 
-                    reply TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            await conn.execute(
-                "INSERT INTO questions (user_id, username, question) VALUES ($1, $2, $3)",
-                user_id, username, question_text
-            )
-        finally:
-            await conn.close()
-            
-        await update.message.reply_text(
-            "✅ تم استلام استفسارك بنجاح! سيقوم أحد المشرفين بالرد عليه قريباً",
-            reply_markup=MAIN_KEYBOARD
-        )
-        context.user_data['waiting_for_question'] = False
+            } catch (error) {
+                alert(`❌ فشل الحذف: ${error.message}`);
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = '🗑️ حذف الأسئلة التي تم الرد عليها';
+            }
+        }
 
-        for admin_id in ADMIN_IDS:
-            try:
-                await context.bot.send_message(
-                    chat_id=admin_id,
-                    text="📩 هناك استفسار جديد في لوحة التحكم."
-                )
-            except Exception as e:
-                logging.error(f"فشل إرسال الإشعار للمشرف {admin_id}: {e}")
-
-    except Exception as e:
-        logging.error(f"خطأ في حفظ السؤال: {e}")
-        await update.message.reply_text(
-            "❌ حدث خطأ تقني، حاول مرة أخرى لاحقًا.",
-            reply_markup=MAIN_KEYBOARD
-        )
-
-async def handle_non_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "❌ عذراً، هذا البوت يقبل النصوص الكتابية فقط.\n"
-        "☜ اختر الخدمة المطلوبة من القائمة أدناه",
-        reply_markup=MAIN_KEYBOARD
-    )
-
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not is_admin(user_id):
-        await update.message.reply_text("⛔ عذراً، ليس لديك صلاحية.")
-        return
-    
-    # ✅ دمج الزر مع رسالة الترحيب (حذف النص الإضافي)
-    mini_app_url = "https://khcontrol41.github.io/ask_zadadmin/"  # ⚠️ غيّر هذا الرابط
-    keyboard = [[InlineKeyboardButton("📊 فتح لوحة المشرفين", web_app={"url": mini_app_url})]]
-    await update.message.reply_text(
-        "مرحباً بك. تم تسجيل دخولك كمشرف 🌿",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-# --- 5. تشغيل البوت ---
-def run_bot():
-    global bot_app
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    bot_app = Application.builder().token(TOKEN).build()
-    bot_app.add_handler(CommandHandler("start", start))
-    bot_app.add_handler(MessageHandler(filters.Regex("^(📩 سؤال جديد|📚 الأسئلة الشائعة)$"), handle_main_buttons))
-    bot_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_question))
-    bot_app.add_handler(MessageHandler(~filters.TEXT & ~filters.COMMAND, handle_non_text))
-    bot_app.add_handler(CommandHandler("admin", admin_panel))
-    
-    print("✅ البوت يعمل...")
-    bot_app.run_polling(allowed_updates=Update.ALL_TYPES, stop_signals=None)
-
-# --- 6. تشغيل Flask ---
-if __name__ == "__main__":
-    bot_thread = threading.Thread(target=run_bot)
-    bot_thread.start()
-    
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+        document.addEventListener('DOMContentLoaded', loadQuestions);
+    </script>
+</body>
+</html>
