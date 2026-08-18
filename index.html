@@ -306,16 +306,14 @@
                 const isMyProcessing = isProcessing && isAssignedToMe;
                 badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="tashmi-badge">⏳ في الانتظار</span>';
                 const audioId = `audio-${r.id}`;
-                // جلب الرابط من الخادم
                 let audioSrc = '';
-                let errorMsg = '';
                 try {
                     audioSrc = await getAudioUrl(r.voice_file_id);
+                    console.log('رابط الصوت:', audioSrc); // للمساعدة في التصحيح
                 } catch (e) {
-                    errorMsg = e.message;
+                    console.error('فشل جلب الصوت:', e);
                     audioSrc = '';
                 }
-                // عرض المدة إذا كانت موجودة
                 const durationText = (r.duration && r.duration > 0) ? `⏱️ ${Math.floor(r.duration/60)}:${(r.duration%60).toString().padStart(2,'0')}` : '⏱️ المدة غير معروفة';
                 contentHtml = `
                     <div class="audio-player-wrapper">
@@ -333,7 +331,7 @@
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 3)">3x</button>
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 4)">4x</button>
                         </div>
-                        ${!audioSrc ? `<div style="color:red;font-size:12px;">⚠️ ${errorMsg || 'تعذر تحميل الصوت، حاول تحديث الصفحة'}</div>` : ''}
+                        ${!audioSrc ? '<div style="color:red;font-size:12px;">⚠️ تعذر تحميل الصوت، تحقق من وحدة التحكم (F12)</div>' : ''}
                     </div>
                     <div class="actions">
                         ${isMyProcessing ? `<button class="unassign-btn" onclick="unassignTashmi(${r.id})">↩️ إلغاء التولي</button>` : `<button class="assign-btn" onclick="assignTashmi(${r.id})">🔄 تولي التصحيح</button>`}
