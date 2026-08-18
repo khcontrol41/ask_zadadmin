@@ -268,51 +268,97 @@
         finally { refreshBtn.disabled = false; }
     }
 
-    // ========== تحميل التسميعات مع مهلة وبدون تحميل الصوتيات فوراً ==========
-    async function loadTashmiGroups() {
-        const container = document.getElementById('tashmi-container');
-        const refreshBtn = document.getElementById('refreshBtn');
-        refreshBtn.disabled = true;
-        container.innerHTML = '<div class="loader">⏳ جاري التحميل...</div>';
+    // ========== دوال التعيين المعدلة ==========
+    async function assignQuestion(qId) {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
         try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
-            const res = await fetch(`${BASE_URL}/tashmi/get`, {
+            const res = await fetch(`${BASE_URL}/assign`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ admin_id: adminId, group: 'all' }),
-                signal: controller.signal
+                body: JSON.stringify({ question_id: qId, admin_id: adminId })
             });
-            clearTimeout(timeoutId);
-            if (!res.ok) throw new Error((await res.json()).error || 'فشل');
             const data = await res.json();
-            currentTashmiRecords = data;
-            const pendingAll = data.filter(r => r.status === 'pending').length;
-            document.getElementById('tashmiPendingCount').textContent = pendingAll;
-            document.getElementById('tashmiTotalCount').textContent = data.length;
-            // بناء أزرار المجموعات
-            const groups = new Set(data.map(r => r.group_number).filter(Boolean));
-            const groupsContainer = document.getElementById('groupsContainer');
-            let groupsHtml = `<button class="group-tab active" data-group="all" onclick="switchGroup('all')">📋 الكل <span class="badge ${pendingAll === 0 ? 'zero' : ''}">${pendingAll}</span></button>`;
-            const sortedGroups = Array.from(groups).sort((a,b) => Number(a) - Number(b));
-            sortedGroups.forEach(g => {
-                const count = data.filter(r => r.group_number === g && r.status === 'pending').length;
-                groupsHtml += `<button class="group-tab" data-group="${g}" onclick="switchGroup('${g}')">🎯 مجموعة ${g} <span class="badge ${count === 0 ? 'zero' : ''}">${count}</span></button>`;
-            });
-            groupsContainer.innerHTML = groupsHtml;
-            // عرض التسميعات بدون تحميل الصوتيات (سيتم تحميلها عند الضغط على زر التشغيل)
-            await renderTashmiRecordsLazy(data.filter(r => r.group_number === currentGroup || currentGroup === 'all'));
-        } catch(e) {
-            if (e.name === 'AbortError') {
-                container.innerHTML = '<div class="error">⏱️ انتهت المهلة، حاول تحديث الصفحة</div>';
-            } else {
-                container.innerHTML = `<div class="error">❌ ${e.message}</div>`;
+            if (!res.ok) {
+                alert(`❌ فشل تولي الرد: ${data.error || 'خطأ غير معروف'}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي الرد';
+                return;
             }
+            loadQuestions(); // إعادة تحميل
+        } catch(e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '🔄 تولي الرد';
         }
-        finally { refreshBtn.disabled = false; }
     }
 
-    // ========== دالة عرض التسميعات بدون تحميل الصوتيات مسبقاً ==========
+    async function assignTashmi(recordId) {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
+        try {
+            const res = await fetch(`${BASE_URL}/tashmi/assign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ record_id: recordId, admin_id: adminId })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ غير معروف'}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي التصحيح';
+                return;
+            }
+            loadTashmiGroups(); // إعادة تحميل
+        } catch(e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '🔄 تولي التصحيح';
+        }
+    }
+
+    // ========== دوال الصوت المعدلة ==========
+    async function getAudioUrl(fileId) {
+        if (!fileId) throw new Error('معرف الملف فارغ');
+        const res = await fetch(`${BASE_URL}/get_audio_url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: fileId, admin_id: adminId })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'فشل جلب الرابط');
+        }
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data.url;
+    }
+
+    async function loadAudio(audioId, fileId) {
+        const audio = document.getElementById(audioId);
+        if (!audio) return;
+        const source = audio.querySelector('source');
+        if (!source) return;
+        // إذا كان الرابط محملاً مسبقاً، لا نعيد التحميل
+        if (source.src && source.src !== '') return;
+        try {
+            const url = await getAudioUrl(fileId);
+            source.src = url;
+            audio.load();
+            // إخفاء زر التحميل بعد النجاح
+            const parent = audio.closest('.audio-player-wrapper');
+            if (parent) {
+                const loadBtn = parent.querySelector('button[onclick^="loadAudio"]');
+                if (loadBtn) loadBtn.style.display = 'none';
+            }
+        } catch (e) {
+            alert('❌ فشل تحميل الصوت: ' + e.message);
+        }
+    }
+
+    // ========== دوال العرض المعدلة ==========
     async function renderTashmiRecordsLazy(records) {
         const container = document.getElementById('tashmi-container');
         if (records.length === 0) {
@@ -327,13 +373,16 @@
             const isAssignedToOther = isProcessing && !isAssignedToMe;
             let badge = '', cardClass = 'tashmi-card', contentHtml = '';
 
-            if (isAnswered) { badge = '<span class="answered-badge">✅ تم الرد</span>'; contentHtml = `<div class="reply-text"><strong>ملاحظة المعلم:</strong> ${r.teacher_note || ''}</div>`; }
-            else if (isAssignedToOther) { badge = '<span class="processing-badge">🔄 قيد المعالجة</span>'; contentHtml = `<div class="processing-text">⏳ يُعالج من قبل مشرف آخر.</div>`; }
-            else {
+            if (isAnswered) {
+                badge = '<span class="answered-badge">✅ تم الرد</span>';
+                contentHtml = `<div class="reply-text"><strong>ملاحظة المعلم:</strong> ${r.teacher_note || ''}</div>`;
+            } else if (isAssignedToOther) {
+                badge = '<span class="processing-badge">🔄 قيد المعالجة</span>';
+                contentHtml = `<div class="processing-text">⏳ يُعالج من قبل مشرف آخر.</div>`;
+            } else {
                 const isMyProcessing = isProcessing && isAssignedToMe;
                 badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="tashmi-badge">⏳ في الانتظار</span>';
                 const audioId = `audio-${r.id}`;
-                // لا نطلب الرابط الآن، نضعه فارغاً ونحمله عند الضغط على زر التشغيل
                 const durationText = (r.duration && r.duration > 0) ? `⏱️ ${Math.floor(r.duration/60)}:${(r.duration%60).toString().padStart(2,'0')}` : '⏱️ المدة غير معروفة';
                 contentHtml = `
                     <div class="audio-player-wrapper">
@@ -363,30 +412,49 @@
         container.innerHTML = html;
     }
 
-    // ========== دالة تحميل الصوت عند الضغط على الزر ==========
-    async function loadAudio(audioId, fileId) {
-        const audio = document.getElementById(audioId);
-        if (!audio) return;
-        const source = audio.querySelector('source');
-        if (!source) return;
-        // إذا كان الرابط محملاً مسبقاً، لا نعيد التحميل
-        if (source.src && source.src !== '') return;
+    async function loadTashmiGroups() {
+        const container = document.getElementById('tashmi-container');
+        const refreshBtn = document.getElementById('refreshBtn');
+        refreshBtn.disabled = true;
+        container.innerHTML = '<div class="loader">⏳ جاري التحميل...</div>';
         try {
-            const url = await getAudioUrl(fileId);
-            source.src = url;
-            audio.load(); // إعادة تحميل العنصر
-            // إخفاء زر التحميل بعد نجاح التحميل
-            const parent = audio.closest('.audio-player-wrapper');
-            if (parent) {
-                const loadBtn = parent.querySelector('button[onclick^="loadAudio"]');
-                if (loadBtn) loadBtn.style.display = 'none';
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const res = await fetch(`${BASE_URL}/tashmi/get`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ admin_id: adminId, group: 'all' }),
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            if (!res.ok) throw new Error((await res.json()).error || 'فشل');
+            const data = await res.json();
+            currentTashmiRecords = data;
+            const pendingAll = data.filter(r => r.status === 'pending').length;
+            document.getElementById('tashmiPendingCount').textContent = pendingAll;
+            document.getElementById('tashmiTotalCount').textContent = data.length;
+
+            const groups = new Set(data.map(r => r.group_number).filter(Boolean));
+            const groupsContainer = document.getElementById('groupsContainer');
+            let groupsHtml = `<button class="group-tab active" data-group="all" onclick="switchGroup('all')">📋 الكل <span class="badge ${pendingAll === 0 ? 'zero' : ''}">${pendingAll}</span></button>`;
+            const sortedGroups = Array.from(groups).sort((a,b) => Number(a) - Number(b));
+            sortedGroups.forEach(g => {
+                const count = data.filter(r => r.group_number === g && r.status === 'pending').length;
+                groupsHtml += `<button class="group-tab" data-group="${g}" onclick="switchGroup('${g}')">🎯 مجموعة ${g} <span class="badge ${count === 0 ? 'zero' : ''}">${count}</span></button>`;
+            });
+            groupsContainer.innerHTML = groupsHtml;
+            await renderTashmiRecordsLazy(data.filter(r => r.group_number === currentGroup || currentGroup === 'all'));
+        } catch(e) {
+            if (e.name === 'AbortError') {
+                container.innerHTML = '<div class="error">⏱️ انتهت المهلة، حاول تحديث الصفحة</div>';
+            } else {
+                container.innerHTML = `<div class="error">❌ ${e.message}</div>`;
             }
-        } catch (e) {
-            alert('❌ فشل تحميل الصوت: ' + e.message);
         }
+        finally { refreshBtn.disabled = false; }
     }
 
-    // ========== دالة switchGroup المعدلة ==========
+    // ========== دوال التبديل والإرسال المعدلة ==========
     async function switchGroup(groupId) {
         currentGroup = groupId;
         document.querySelectorAll('.group-tab').forEach(btn => btn.classList.remove('active'));
@@ -394,74 +462,6 @@
         if (activeBtn) activeBtn.classList.add('active');
         const filtered = currentGroup === 'all' ? currentTashmiRecords : currentTashmiRecords.filter(r => r.group_number === currentGroup);
         await renderTashmiRecordsLazy(filtered);
-    }
-
-    // ========== دالة جلب رابط الصوت ==========
-    async function getAudioUrl(fileId) {
-        if (!fileId) throw new Error('معرف الملف فارغ');
-        const res = await fetch(`${BASE_URL}/get_audio_url`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_id: fileId, admin_id: adminId })
-        });
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || 'فشل جلب الرابط');
-        }
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        return data.url;
-    }
-
-    function setSpeed(audioId, rate) {
-        const audio = document.getElementById(audioId);
-        if (audio) {
-            audio.playbackRate = rate;
-            const parent = audio.closest('.audio-player-wrapper');
-            if (parent) {
-                parent.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active-speed'));
-                const btns = parent.querySelectorAll('.speed-btn');
-                const index = [1,1.5,2,3,4].indexOf(rate);
-                if (index !== -1) btns[index].classList.add('active-speed');
-            }
-        }
-    }
-
-    // ========== دوال الاستفسارات ==========
-    async function assignQuestion(qId) {
-        try {
-            const res = await fetch(`${BASE_URL}/assign`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question_id: qId, admin_id: adminId })
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                alert(`❌ فشل تولي الرد: ${data.error || 'خطأ غير معروف'}`);
-                return;
-            }
-            loadQuestions();
-        } catch(e) {
-            alert(`❌ خطأ في الاتصال: ${e.message}`);
-        }
-    }
-
-    async function unassignQuestion(qId) {
-        try {
-            const res = await fetch(`${BASE_URL}/unassign`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question_id: qId, admin_id: adminId })
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                alert(`❌ فشل إلغاء التولي: ${data.error || 'خطأ غير معروف'}`);
-                return;
-            }
-            loadQuestions();
-        } catch(e) {
-            alert(`❌ خطأ في الاتصال: ${e.message}`);
-        }
     }
 
     async function sendReply(qId) {
@@ -487,30 +487,6 @@
         }
     }
 
-    // ========== دوال التسميع ==========
-    async function assignTashmi(recordId) {
-        try {
-            const res = await fetch(`${BASE_URL}/tashmi/assign`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ record_id: recordId, admin_id: adminId })
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ غير معروف'}`);
-                return;
-            }
-            loadTashmiGroups();
-        } catch(e) {
-            alert(`❌ خطأ في الاتصال: ${e.message}`);
-        }
-    }
-
-    async function unassignTashmi(recordId) {
-        alert('سيتم إلغاء التولي تلقائياً بعد 15 دقيقة.');
-        loadTashmiGroups();
-    }
-
     async function sendTashmiReply(recordId) {
         const textarea = document.getElementById(`tnote-${recordId}`);
         const note = textarea.value.trim();
@@ -532,6 +508,46 @@
             btn.disabled = false;
             btn.textContent = '📤 إرسال الملاحظة';
         }
+    }
+
+    // ========== دوال أخرى ==========
+    function setSpeed(audioId, rate) {
+        const audio = document.getElementById(audioId);
+        if (audio) {
+            audio.playbackRate = rate;
+            const parent = audio.closest('.audio-player-wrapper');
+            if (parent) {
+                parent.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active-speed'));
+                const btns = parent.querySelectorAll('.speed-btn');
+                const index = [1,1.5,2,3,4].indexOf(rate);
+                if (index !== -1) btns[index].classList.add('active-speed');
+            }
+        }
+    }
+
+    // ========== دوال الاستفسارات (الإلغاء والإرسال) ==========
+    async function unassignQuestion(qId) {
+        try {
+            const res = await fetch(`${BASE_URL}/unassign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: qId, admin_id: adminId })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(`❌ فشل إلغاء التولي: ${data.error || 'خطأ غير معروف'}`);
+                return;
+            }
+            loadQuestions();
+        } catch(e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+        }
+    }
+
+    // ========== دوال التسميع (الإلغاء والإرسال) ==========
+    async function unassignTashmi(recordId) {
+        alert('سيتم إلغاء التولي تلقائياً بعد 15 دقيقة.');
+        loadTashmiGroups();
     }
 
     // ======================= دوال إضافية =======================
