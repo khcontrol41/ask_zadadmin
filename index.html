@@ -282,16 +282,16 @@
                 body: JSON.stringify({ question_id: qId, admin_id: adminId })
             });
             const data = await res.json();
-            console.log('رد الخادم (تولي السؤال):', data); // 👈 سجل في وحدة التحكم
+            console.log('رد الخادم (تولي السؤال):', data);
             if (!res.ok) {
                 alert(`❌ فشل تولي الرد: ${data.error || 'خطأ'}`);
                 btn.disabled = false;
                 btn.textContent = '🔄 تولي الرد';
                 return;
             }
-            loadQuestions();
+            loadQuestions(); // إعادة تحميل بعد النجاح
         } catch(e) {
-            alert(`❌ خطأ: ${e.message}`);
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
             btn.disabled = false;
             btn.textContent = '🔄 تولي الرد';
         }
@@ -310,22 +310,22 @@
                 body: JSON.stringify({ record_id: recordId, admin_id: adminId })
             });
             const data = await res.json();
-            console.log('رد الخادم (تولي التسميع):', data); // 👈 سجل في وحدة التحكم
+            console.log('رد الخادم (تولي التسميع):', data);
             if (!res.ok) {
                 alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ'}`);
                 btn.disabled = false;
                 btn.textContent = '🔄 تولي التصحيح';
                 return;
             }
-            loadTashmiGroups();
+            loadTashmiGroups(); // إعادة تحميل بعد النجاح
         } catch(e) {
-            alert(`❌ خطأ: ${e.message}`);
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
             btn.disabled = false;
             btn.textContent = '🔄 تولي التصحيح';
         }
     }
 
-    // ========== دوال الصوت المعدلة ==========
+    // ========== دوال الصوت ==========
     async function getAudioUrl(fileId) {
         if (!fileId) throw new Error('معرف الملف فارغ');
         const res = await fetch(`${BASE_URL}/get_audio_url`, {
@@ -347,13 +347,12 @@
         if (!audio) return;
         const source = audio.querySelector('source');
         if (!source) return;
-        // إذا كان الرابط موجوداً لا نعيد التحميل
         if (source.src && source.src !== '' && source.src !== window.location.href) {
             return;
         }
         try {
             const url = await getAudioUrl(fileId);
-            console.log('رابط الصوت:', url); // 👈 سجل في وحدة التحكم
+            console.log('رابط الصوت:', url);
             if (!url) throw new Error('الرابط فارغ');
             source.src = url;
             audio.load();
@@ -464,7 +463,7 @@
         finally { refreshBtn.disabled = false; }
     }
 
-    // ========== دوال التبديل والإرسال المعدلة ==========
+    // ========== دوال التبديل والإرسال ==========
     async function switchGroup(groupId) {
         currentGroup = groupId;
         document.querySelectorAll('.group-tab').forEach(btn => btn.classList.remove('active'));
@@ -535,7 +534,7 @@
         }
     }
 
-    // ========== دوال الاستفسارات (الإلغاء والإرسال) ==========
+    // ========== دوال الاستفسارات (الإلغاء) ==========
     async function unassignQuestion(qId) {
         try {
             const res = await fetch(`${BASE_URL}/unassign`, {
@@ -554,7 +553,7 @@
         }
     }
 
-    // ========== دوال التسميع (الإلغاء والإرسال) ==========
+    // ========== دوال التسميع (الإلغاء) ==========
     async function unassignTashmi(recordId) {
         alert('سيتم إلغاء التولي تلقائياً بعد 15 دقيقة.');
         loadTashmiGroups();
