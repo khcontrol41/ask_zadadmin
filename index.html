@@ -244,8 +244,7 @@
         finally { refreshBtn.disabled = false; }
     }
 
-    // ======================= دوال التسميع =======================
-    // ========== استبدل دالة loadTashmiGroups ==========
+    // =================== دوال التسميع المعدلة ===================
     async function loadTashmiGroups() {
         const container = document.getElementById('tashmi-container');
         const refreshBtn = document.getElementById('refreshBtn');
@@ -278,7 +277,6 @@
         finally { refreshBtn.disabled = false; }
     }
 
-    // ========== استبدل دالة switchGroup ==========
     async function switchGroup(groupId) {
         currentGroup = groupId;
         document.querySelectorAll('.group-tab').forEach(btn => btn.classList.remove('active'));
@@ -288,7 +286,6 @@
         await renderTashmiRecords(filtered);
     }
 
-    // ========== استبدل دالة renderTashmiRecords ==========
     async function renderTashmiRecords(records) {
         const container = document.getElementById('tashmi-container');
         if (records.length === 0) {
@@ -309,15 +306,16 @@
                 const isMyProcessing = isProcessing && isAssignedToMe;
                 badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="tashmi-badge">⏳ في الانتظار</span>';
                 const audioId = `audio-${r.id}`;
-                // جلب الرابط مع معالجة الأخطاء
+                // جلب الرابط من الخادم
                 let audioSrc = '';
+                let errorMsg = '';
                 try {
                     audioSrc = await getAudioUrl(r.voice_file_id);
                 } catch (e) {
-                    console.error('فشل جلب الصوت:', e);
+                    errorMsg = e.message;
                     audioSrc = '';
                 }
-                // عرض معلومات المدة إذا كانت موجودة
+                // عرض المدة إذا كانت موجودة
                 const durationText = (r.duration && r.duration > 0) ? `⏱️ ${Math.floor(r.duration/60)}:${(r.duration%60).toString().padStart(2,'0')}` : '⏱️ المدة غير معروفة';
                 contentHtml = `
                     <div class="audio-player-wrapper">
@@ -335,7 +333,7 @@
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 3)">3x</button>
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 4)">4x</button>
                         </div>
-                        ${!audioSrc ? '<div style="color:red;font-size:12px;">⚠️ تعذر تحميل الصوت، حاول تحديث الصفحة</div>' : ''}
+                        ${!audioSrc ? `<div style="color:red;font-size:12px;">⚠️ ${errorMsg || 'تعذر تحميل الصوت، حاول تحديث الصفحة'}</div>` : ''}
                     </div>
                     <div class="actions">
                         ${isMyProcessing ? `<button class="unassign-btn" onclick="unassignTashmi(${r.id})">↩️ إلغاء التولي</button>` : `<button class="assign-btn" onclick="assignTashmi(${r.id})">🔄 تولي التصحيح</button>`}
@@ -349,7 +347,6 @@
         container.innerHTML = html;
     }
 
-    // ========== أضف هذه الدالة الجديدة (إذا لم تكن موجودة) ==========
     async function getAudioUrl(fileId) {
         if (!fileId) throw new Error('معرف الملف فارغ');
         const res = await fetch(`${BASE_URL}/get_audio_url`, {
