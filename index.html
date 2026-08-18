@@ -309,7 +309,7 @@
                 let audioSrc = '';
                 try {
                     audioSrc = await getAudioUrl(r.voice_file_id);
-                    console.log('رابط الصوت:', audioSrc); // للمساعدة في التصحيح
+                    console.log('رابط الصوت:', audioSrc);
                 } catch (e) {
                     console.error('فشل جلب الصوت:', e);
                     audioSrc = '';
@@ -375,7 +375,67 @@
         }
     }
 
-    // ======================= دوال API للتسميع =======================
+    // ========== دوال الاستفسارات ==========
+    async function assignQuestion(qId) {
+        try {
+            const res = await fetch(`${BASE_URL}/assign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: qId, admin_id: adminId })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(`❌ فشل تولي الرد: ${data.error || 'خطأ غير معروف'}`);
+                return;
+            }
+            loadQuestions(); // إعادة تحميل بعد النجاح
+        } catch(e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+        }
+    }
+
+    async function unassignQuestion(qId) {
+        try {
+            const res = await fetch(`${BASE_URL}/unassign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: qId, admin_id: adminId })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                alert(`❌ فشل إلغاء التولي: ${data.error || 'خطأ غير معروف'}`);
+                return;
+            }
+            loadQuestions();
+        } catch(e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+        }
+    }
+
+    async function sendReply(qId) {
+        const textarea = document.getElementById(`reply-${qId}`);
+        const reply = textarea.value.trim();
+        if (!reply) { alert('اكتب الرد'); return; }
+        const btn = textarea.nextElementSibling;
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
+        try {
+            const res = await fetch(`${BASE_URL}/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: qId, reply_text: reply, admin_id: adminId })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'فشل الإرسال');
+            loadQuestions();
+        } catch(e) {
+            alert(`❌ ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '📤 إرسال الرد';
+        }
+    }
+
+    // ========== دوال التسميع ==========
     async function assignTashmi(recordId) {
         try {
             const res = await fetch(`${BASE_URL}/tashmi/assign`, {
@@ -383,13 +443,20 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ record_id: recordId, admin_id: adminId })
             });
-            if (!res.ok) alert('❌ فشل التولي');
-            loadTashmiGroups();
-        } catch(e) { alert(e.message); }
+            const data = await res.json();
+            if (!res.ok) {
+                alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ غير معروف'}`);
+                return;
+            }
+            loadTashmiGroups(); // إعادة تحميل بعد النجاح
+        } catch(e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+        }
     }
 
     async function unassignTashmi(recordId) {
-        alert('سيتم إلغاء التولي تلقائياً بعد 15 دقيقة، أو يمكن للمشرف الآخر توليها.');
+        // ملاحظة: لا يوجد نقطة نهاية لإلغاء التولي في التسميع حالياً، سنكتفي بإعادة التحميل
+        alert('سيتم إلغاء التولي تلقائياً بعد 15 دقيقة.');
         loadTashmiGroups();
     }
 
@@ -398,47 +465,25 @@
         const note = textarea.value.trim();
         if (!note) { alert('الرجاء كتابة الملاحظة'); return; }
         const btn = textarea.nextElementSibling;
-        btn.disabled = true; btn.textContent = '⏳ جاري...';
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
         try {
             const res = await fetch(`${BASE_URL}/tashmi/reply`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ record_id: recordId, note_text: note, admin_id: adminId })
             });
-            if (!res.ok) throw new Error((await res.json()).error || 'فشل');
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'فشل الإرسال');
             loadTashmiGroups();
-        } catch(e) { alert(`❌ ${e.message}`); btn.disabled = false; btn.textContent = '📤 إرسال الملاحظة'; }
+        } catch(e) {
+            alert(`❌ ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '📤 إرسال الملاحظة';
+        }
     }
 
-    // ======================= دوال الاستفسارات القديمة =======================
-    async function assignQuestion(qId) {
-        try {
-            const res = await fetch(`${BASE_URL}/assign`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qId, admin_id: adminId}) });
-            if(!res.ok) alert('فشل');
-            loadQuestions();
-        } catch(e){ alert(e.message); }
-    }
-
-    async function unassignQuestion(qId) {
-        try {
-            const res = await fetch(`${BASE_URL}/unassign`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qId, admin_id: adminId}) });
-            if(!res.ok) alert('فشل');
-            loadQuestions();
-        } catch(e){ alert(e.message); }
-    }
-
-    async function sendReply(qId) {
-        const textarea = document.getElementById(`reply-${qId}`);
-        const reply = textarea.value.trim();
-        if (!reply) { alert('اكتب الرد'); return; }
-        const btn = textarea.nextElementSibling; btn.disabled = true; btn.textContent = '⏳...';
-        try {
-            const res = await fetch(`${BASE_URL}/reply`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qId, reply_text: reply, admin_id: adminId}) });
-            if(!res.ok) throw new Error((await res.json()).error);
-            loadQuestions();
-        } catch(e){ alert(e.message); btn.disabled = false; btn.textContent = '📤 إرسال الرد'; }
-    }
-
+    // ======================= دوال إضافية =======================
     async function deleteAnswered() {
         if(!confirm('⚠️ حذف جميع الاستفسارات المجاب عليها؟')) return;
         try {
