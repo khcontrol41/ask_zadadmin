@@ -245,6 +245,7 @@
     }
 
     // ======================= دوال التسميع =======================
+    // ========== استبدال دالة loadTashmiGroups بالكامل ==========
     async function loadTashmiGroups() {
         const container = document.getElementById('tashmi-container');
         const refreshBtn = document.getElementById('refreshBtn');
@@ -272,18 +273,19 @@
                 groupsHtml += `<button class="group-tab" data-group="${g}" onclick="switchGroup('${g}')">🎯 مجموعة ${g} <span class="badge ${count === 0 ? 'zero' : ''}">${count}</span></button>`;
             });
             groupsContainer.innerHTML = groupsHtml;
-            renderTashmiRecords(data.filter(r => r.group_number === currentGroup || currentGroup === 'all'));
+            await renderTashmiRecords(data.filter(r => r.group_number === currentGroup || currentGroup === 'all'));
         } catch(e) { container.innerHTML = `<div class="error">❌ ${e.message}</div>`; }
         finally { refreshBtn.disabled = false; }
     }
 
-    function switchGroup(groupId) {
+    // ========== استبدال دالة switchGroup بالكامل ==========
+    async function switchGroup(groupId) {
         currentGroup = groupId;
         document.querySelectorAll('.group-tab').forEach(btn => btn.classList.remove('active'));
         const activeBtn = document.querySelector(`.group-tab[data-group="${groupId}"]`);
         if (activeBtn) activeBtn.classList.add('active');
         const filtered = currentGroup === 'all' ? currentTashmiRecords : currentTashmiRecords.filter(r => r.group_number === currentGroup);
-        renderTashmiRecords(filtered);
+        await renderTashmiRecords(filtered);
     }
 
     // ========== استبدال دالة renderTashmiRecords بالكامل ==========
@@ -307,7 +309,13 @@
                 const isMyProcessing = isProcessing && isAssignedToMe;
                 badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="tashmi-badge">⏳ في الانتظار</span>';
                 const audioId = `audio-${r.id}`;
-                const audioSrc = await getAudioUrl(r.voice_file_id);
+                let audioSrc = '';
+                try {
+                    audioSrc = await getAudioUrl(r.voice_file_id);
+                } catch (e) {
+                    console.error('فشل جلب الصوت:', e);
+                    audioSrc = '';
+                }
                 contentHtml = `
                     <div class="audio-player-wrapper">
                         <audio controls id="${audioId}">
@@ -344,10 +352,11 @@
             });
             if (!res.ok) throw new Error('فشل جلب رابط الصوت');
             const data = await res.json();
+            if (data.error) throw new Error(data.error);
             return data.url;
         } catch (e) {
             console.error('خطأ في جلب الصوت:', e);
-            return '';
+            return ''; // يعيد رابط فارغ في حال الفشل
         }
     }
 
