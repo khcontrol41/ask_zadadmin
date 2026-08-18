@@ -81,7 +81,8 @@
                 </label>
             </div>
             <div class="header-right">
-                <button class="delete-btn" id="deleteBtn" onclick="deleteAnswered()">🗑️ حذف التي تم الرد عليها</button>
+                <!-- ✅ تعديل النص -->
+                <button class="delete-btn" id="deleteBtn" onclick="deleteAnswered()">🗑️ حذف الأسئلة التي تم الرد عليها</button>
             </div>
         </div>
 
@@ -119,7 +120,6 @@
         let currentQuestions = [];
         let selectedIds = new Set();
 
-        // ✅ دالة مساعدة لإنشاء رابط المستخدم (الميزة الجديدة)
         function formatUsername(username) {
             if (!username || username === "مجهول") {
                 return '👤 مجهول';
@@ -190,7 +190,6 @@
                     let cardClass = '';
                     let contentHtml = '';
 
-                    // ✅ عرض اسم المستخدم كرابط
                     const userDisplay = formatUsername(q.username);
 
                     if (isAnswered) {
@@ -256,7 +255,6 @@
             }
         }
 
-        // --- باقي الدوال (بدون تغيير) ---
         function toggleSelect(questionId) {
             const cb = document.getElementById(`cb-${questionId}`);
             if (cb.checked) {
@@ -452,6 +450,7 @@
             }
         }
 
+        // ✅ تعديل نص زر الحذف في رسالة التأكيد (اختياري)
         async function deleteAnswered() {
             if (!confirm('⚠️ هل أنت متأكد من حذف جميع الاستفسارات التي تم الرد عليها؟')) {
                 return;
@@ -480,12 +479,12 @@
             } catch (error) {
                 alert(`❌ فشل الحذف: ${error.message}`);
                 deleteBtn.disabled = false;
-                deleteBtn.textContent = '🗑️ حذف التي تم الرد عليها';
+                deleteBtn.textContent = '🗑️ حذف الأسئلة التي تم الرد عليها';
             } finally {
                 const btn = document.getElementById('deleteBtn');
                 if (btn) {
                     btn.disabled = false;
-                    btn.textContent = '🗑️ حذف التي تم الرد عليها';
+                    btn.textContent = '🗑️ حذف الأسئلة التي تم الرد عليها';
                 }
             }
         }
