@@ -270,7 +270,9 @@
 
     // ========== دوال التعيين المعدلة ==========
     async function assignQuestion(qId) {
-        const btn = event.target;
+        const btns = document.querySelectorAll(`.card[data-id="${qId}"] .assign-btn`);
+        const btn = btns[0];
+        if (!btn) return;
         btn.disabled = true;
         btn.textContent = '⏳ جاري...';
         try {
@@ -280,22 +282,25 @@
                 body: JSON.stringify({ question_id: qId, admin_id: adminId })
             });
             const data = await res.json();
+            console.log('رد الخادم (تولي السؤال):', data); // 👈 سجل في وحدة التحكم
             if (!res.ok) {
-                alert(`❌ فشل تولي الرد: ${data.error || 'خطأ غير معروف'}`);
+                alert(`❌ فشل تولي الرد: ${data.error || 'خطأ'}`);
                 btn.disabled = false;
                 btn.textContent = '🔄 تولي الرد';
                 return;
             }
-            loadQuestions(); // إعادة تحميل
+            loadQuestions();
         } catch(e) {
-            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            alert(`❌ خطأ: ${e.message}`);
             btn.disabled = false;
             btn.textContent = '🔄 تولي الرد';
         }
     }
 
     async function assignTashmi(recordId) {
-        const btn = event.target;
+        const btns = document.querySelectorAll(`.card[data-id="${recordId}"] .assign-btn`);
+        const btn = btns[0];
+        if (!btn) return;
         btn.disabled = true;
         btn.textContent = '⏳ جاري...';
         try {
@@ -305,15 +310,16 @@
                 body: JSON.stringify({ record_id: recordId, admin_id: adminId })
             });
             const data = await res.json();
+            console.log('رد الخادم (تولي التسميع):', data); // 👈 سجل في وحدة التحكم
             if (!res.ok) {
-                alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ غير معروف'}`);
+                alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ'}`);
                 btn.disabled = false;
                 btn.textContent = '🔄 تولي التصحيح';
                 return;
             }
-            loadTashmiGroups(); // إعادة تحميل
+            loadTashmiGroups();
         } catch(e) {
-            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            alert(`❌ خطأ: ${e.message}`);
             btn.disabled = false;
             btn.textContent = '🔄 تولي التصحيح';
         }
@@ -341,13 +347,16 @@
         if (!audio) return;
         const source = audio.querySelector('source');
         if (!source) return;
-        // إذا كان الرابط محملاً مسبقاً، لا نعيد التحميل
-        if (source.src && source.src !== '') return;
+        // إذا كان الرابط موجوداً لا نعيد التحميل
+        if (source.src && source.src !== '' && source.src !== window.location.href) {
+            return;
+        }
         try {
             const url = await getAudioUrl(fileId);
+            console.log('رابط الصوت:', url); // 👈 سجل في وحدة التحكم
+            if (!url) throw new Error('الرابط فارغ');
             source.src = url;
             audio.load();
-            // إخفاء زر التحميل بعد النجاح
             const parent = audio.closest('.audio-player-wrapper');
             if (parent) {
                 const loadBtn = parent.querySelector('button[onclick^="loadAudio"]');
@@ -355,6 +364,7 @@
             }
         } catch (e) {
             alert('❌ فشل تحميل الصوت: ' + e.message);
+            console.error(e);
         }
     }
 
