@@ -245,7 +245,7 @@
     }
 
     // ======================= دوال التسميع =======================
-    // ========== استبدال دالة loadTashmiGroups بالكامل ==========
+    // ========== استبدال دالة loadTashmiGroups ==========
     async function loadTashmiGroups() {
         const container = document.getElementById('tashmi-container');
         const refreshBtn = document.getElementById('refreshBtn');
@@ -278,7 +278,7 @@
         finally { refreshBtn.disabled = false; }
     }
 
-    // ========== استبدال دالة switchGroup بالكامل ==========
+    // ========== استبدال دالة switchGroup ==========
     async function switchGroup(groupId) {
         currentGroup = groupId;
         document.querySelectorAll('.group-tab').forEach(btn => btn.classList.remove('active'));
@@ -288,7 +288,7 @@
         await renderTashmiRecords(filtered);
     }
 
-    // ========== استبدال دالة renderTashmiRecords بالكامل ==========
+    // ========== استبدال دالة renderTashmiRecords ==========
     async function renderTashmiRecords(records) {
         const container = document.getElementById('tashmi-container');
         if (records.length === 0) {
@@ -309,6 +309,7 @@
                 const isMyProcessing = isProcessing && isAssignedToMe;
                 badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="tashmi-badge">⏳ في الانتظار</span>';
                 const audioId = `audio-${r.id}`;
+                // محاولة جلب رابط الصوت مع معالجة الخطأ
                 let audioSrc = '';
                 try {
                     audioSrc = await getAudioUrl(r.voice_file_id);
@@ -316,10 +317,11 @@
                     console.error('فشل جلب الصوت:', e);
                     audioSrc = '';
                 }
+                // إزالة type="audio/ogg" ليدعم m4a و mp3 تلقائياً، وإضافة خاصية preload="metadata"
                 contentHtml = `
                     <div class="audio-player-wrapper">
-                        <audio controls id="${audioId}">
-                            <source src="${audioSrc}" type="audio/ogg">
+                        <audio controls preload="metadata" id="${audioId}">
+                            <source src="${audioSrc}">
                             المتصفح لا يدعم تشغيل الصوت.
                         </audio>
                         <div class="speed-btns">
@@ -342,22 +344,21 @@
         container.innerHTML = html;
     }
 
-    // ========== دالة جديدة لجلب رابط الصوت ==========
+    // ========== أضف هذه الدالة الجديدة بعد دالة renderTashmiRecords (إذا لم تكن موجودة) ==========
     async function getAudioUrl(fileId) {
-        try {
-            const res = await fetch(`${BASE_URL}/get_audio_url`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ file_id: fileId, admin_id: adminId })
-            });
-            if (!res.ok) throw new Error('فشل جلب رابط الصوت');
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            return data.url;
-        } catch (e) {
-            console.error('خطأ في جلب الصوت:', e);
-            return ''; // يعيد رابط فارغ في حال الفشل
+        if (!fileId) throw new Error('معرف الملف فارغ');
+        const res = await fetch(`${BASE_URL}/get_audio_url`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ file_id: fileId, admin_id: adminId })
+        });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'فشل جلب الرابط');
         }
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data.url;
     }
 
     function setSpeed(audioId, rate) {
