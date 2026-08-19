@@ -290,13 +290,10 @@
 
     // 1. دالة تولي التصحيح (تعمل لكل الصوتيات)
     async function assignTashmi(recordId) {
-        // العثور على البطاقة والزر
         const card = document.querySelector(`.card[data-id="${recordId}"]`);
         if (!card) return;
         const btn = card.querySelector('.assign-btn');
         if (!btn) return;
-
-        // منع الضغط المتكرر
         if (btn.disabled) return;
         btn.disabled = true;
         btn.textContent = '⏳ جاري...';
@@ -316,20 +313,16 @@
                 return;
             }
 
-            // ✅ نجاح التولي: نحدّث البطاقة مباشرة دون إعادة تحميل القائمة
-            // 1. تغيير حالة البطاقة
             const badge = card.querySelector('.tashmi-badge, .processing-badge');
             if (badge) {
                 badge.className = 'processing-badge';
                 badge.textContent = '🔄 أنت تعالج';
             }
 
-            // 2. تغيير الزر إلى "إلغاء التولي"
             btn.className = 'unassign-btn';
             btn.textContent = '↩️ إلغاء التولي';
             btn.onclick = function() { unassignTashmi(recordId); };
 
-            // 3. تمكين حقل الملاحظة وزر الإرسال
             const textarea = card.querySelector('.reply-area');
             const sendBtn = card.querySelector('.send-btn');
             if (textarea) {
@@ -342,14 +335,12 @@
                 sendBtn.onclick = function() { sendTashmiReply(recordId); };
             }
 
-            // 4. تحديث العداد العلوي (تقليل عدد المعلقات)
             const pendingSpan = document.getElementById('tashmiPendingCount');
             if (pendingSpan) {
                 const current = parseInt(pendingSpan.textContent) || 0;
                 pendingSpan.textContent = Math.max(0, current - 1);
             }
 
-            // 5. تحديث عداد المجموعة في شريط الأزرار
             const group = card.querySelector('.user strong')?.textContent?.replace('المجموعة ', '') || '';
             if (group) {
                 const groupBtn = document.querySelector(`.group-tab[data-group="${group}"] .badge`);
@@ -375,19 +366,13 @@
         if (!card) return;
         const btn = card.querySelector('.unassign-btn');
         if (!btn) return;
-
         if (btn.disabled) return;
         btn.disabled = true;
         btn.textContent = '⏳ جاري...';
 
         try {
-            // نرسل طلب إلغاء التولي (نستخدم نقطة /tashmi/assign مع status مختلف)
-            // لكن بما أننا لا نملك نقطة unassign، سنعتبرها ملغاة ونعيد ضبطها محليًا
-            // (أو يمكنك إضافة نقطة /tashmi/unassign لاحقًا)
-            // الحل المؤقت: نعيد ضبط البطاقة إلى حالة الانتظار
             alert('⏳ سيتم إلغاء التولي خلال 15 دقيقة تلقائيًا، أو يمكنك تحديث الصفحة');
 
-            // نعيد ضبط البطاقة محليًا (حتى لو لم ينجح الطلب، سيبقى الشكل متسقًا)
             const badge = card.querySelector('.processing-badge');
             if (badge) {
                 badge.className = 'tashmi-badge';
@@ -411,14 +396,12 @@
                 sendBtn.textContent = '📤 إرسال الملاحظة';
             }
 
-            // زيادة العداد العلوي
             const pendingSpan = document.getElementById('tashmiPendingCount');
             if (pendingSpan) {
                 const current = parseInt(pendingSpan.textContent) || 0;
                 pendingSpan.textContent = current + 1;
             }
 
-            // زيادة عداد المجموعة
             const group = card.querySelector('.user strong')?.textContent?.replace('المجموعة ', '') || '';
             if (group) {
                 const groupBtn = document.querySelector(`.group-tab[data-group="${group}"] .badge`);
@@ -429,7 +412,6 @@
                 }
             }
 
-            // إعادة تحميل القائمة بعد 3 ثوانٍ للتأكد من التزامن مع الخادم
             setTimeout(() => loadTashmiGroups(), 3000);
 
         } catch (e) {
@@ -467,19 +449,16 @@
                 return;
             }
 
-            // ✅ نجاح الإرسال: تحديث البطاقة مباشرة
             const badge = card.querySelector('.processing-badge, .tashmi-badge');
             if (badge) {
                 badge.className = 'answered-badge';
                 badge.textContent = '✅ تم الرد';
             }
 
-            // إضافة الملاحظة كـ "تم الرد"
             const replyDiv = document.createElement('div');
             replyDiv.className = 'reply-text';
             replyDiv.innerHTML = `<strong>ملاحظة المعلم:</strong> ${note}`;
 
-            // إزالة عناصر التحكم
             const actionsDiv = card.querySelector('.actions');
             if (actionsDiv) actionsDiv.remove();
             const audioWrapper = card.querySelector('.audio-player-wrapper');
@@ -487,20 +466,17 @@
             if (textarea) textarea.remove();
             btn.remove();
 
-            // إضافة الرد
             const userDiv = card.querySelector('.user');
             if (userDiv && replyDiv) {
                 userDiv.after(replyDiv);
             }
 
-            // تحديث العداد العلوي (تقليل عدد المعلقات)
             const pendingSpan = document.getElementById('tashmiPendingCount');
             if (pendingSpan) {
                 const current = parseInt(pendingSpan.textContent) || 0;
                 pendingSpan.textContent = Math.max(0, current - 1);
             }
 
-            // تحديث عداد المجموعة
             const group = card.querySelector('.user strong')?.textContent?.replace('المجموعة ', '') || '';
             if (group) {
                 const groupBtn = document.querySelector(`.group-tab[data-group="${group}"] .badge`);
@@ -513,7 +489,6 @@
                 }
             }
 
-            // إعادة تحميل القائمة بعد 2 ثانية للتأكد من التزامن مع الخادم
             setTimeout(() => loadTashmiGroups(), 2000);
 
         } catch (e) {
@@ -523,7 +498,76 @@
         }
     }
 
-    // 4. دالة عرض التسميعات (سريعة بدون تحميل الصوتيات مسبقًا)
+    // ======================= دوال الصوتيات المعدلة (مع مؤشر تحميل) =======================
+
+    // 1. دالة تحميل الصوت مع مؤشر تحميل
+    async function loadAudio(audioId, fileId) {
+        const audio = document.getElementById(audioId);
+        if (!audio) return;
+        const source = audio.querySelector('source');
+        if (!source) return;
+
+        // إذا كان الصوت محملاً مسبقًا، لا نعيد التحميل
+        if (source.src && source.src !== '' && source.src !== window.location.href) {
+            return;
+        }
+
+        // العثور على زر التحميل وإظهار مؤشر التحميل
+        const parent = audio.closest('.audio-player-wrapper');
+        if (!parent) return;
+        const loadBtn = parent.querySelector('button[onclick^="loadAudio"]');
+        if (!loadBtn) return;
+
+        // تغيير نص الزر إلى "⏳ جاري التحميل..."
+        const originalText = loadBtn.textContent;
+        loadBtn.textContent = '⏳ جاري التحميل...';
+        loadBtn.disabled = true;
+        loadBtn.style.opacity = '0.7';
+
+        try {
+            const url = await getAudioUrl(fileId);
+            if (!url) throw new Error('الرابط فارغ');
+
+            // تعيين المصدر وتشغيل الصوت
+            source.src = url;
+            audio.load();
+
+            // محاولة تشغيل الصوت تلقائيًا (اختياري)
+            try {
+                await audio.play();
+            } catch (e) {
+                // إذا لم يسمح المتصفح بالتشغيل التلقائي، لا مشكلة
+                console.log('التشغيل التلقائي غير مسموح');
+            }
+
+            // إخفاء زر التحميل بعد النجاح
+            loadBtn.style.display = 'none';
+
+            // عرض المدة إذا كانت متوفرة
+            audio.addEventListener('loadedmetadata', function() {
+                const duration = audio.duration;
+                if (duration && !isNaN(duration)) {
+                    const minutes = Math.floor(duration / 60);
+                    const seconds = Math.floor(duration % 60);
+                    const durationText = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                    const durationDiv = parent.querySelector('div[style*="font-size:12px;color:#7f8c8d;"]');
+                    if (durationDiv) {
+                        durationDiv.textContent = durationText;
+                    }
+                }
+            });
+
+        } catch (e) {
+            alert('❌ فشل تحميل الصوت: ' + e.message);
+            console.error(e);
+            // إعادة الزر إلى حالته الأصلية
+            loadBtn.textContent = originalText || '▶️ تحميل الصوت';
+            loadBtn.disabled = false;
+            loadBtn.style.opacity = '1';
+        }
+    }
+
+    // 2. دالة عرض التسميعات (مع عرض مدة الصوت من قاعدة البيانات)
     async function renderTashmiRecords(records) {
         const container = document.getElementById('tashmi-container');
         if (records.length === 0) {
@@ -553,11 +597,14 @@
                     '<span class="tashmi-badge">⏳ في الانتظار</span>';
 
                 const audioId = `audio-${r.id}`;
-                const durationText = (r.duration && r.duration > 0) ?
-                    `⏱️ ${Math.floor(r.duration/60)}:${(r.duration%60).toString().padStart(2,'0')}` :
-                    '⏱️ المدة غير معروفة';
+                // عرض المدة من قاعدة البيانات (إذا كانت 0 نعرض 'غير معروفة')
+                let durationText = '⏱️ المدة غير معروفة';
+                if (r.duration && r.duration > 0) {
+                    const minutes = Math.floor(r.duration / 60);
+                    const seconds = Math.floor(r.duration % 60);
+                    durationText = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
+                }
 
-                // ✅ زر تحميل الصوت (بدون تحميل مسبق)
                 contentHtml = `
                     <div class="audio-player-wrapper">
                         <audio controls preload="none" id="${audioId}">
@@ -566,7 +613,7 @@
                             المتصفح لا يدعم تشغيل الصوت.
                         </audio>
                         <div style="font-size:12px;color:#7f8c8d;margin-top:4px;">${durationText}</div>
-                        <button class="speed-btn" style="background:#2ecc71;color:white;border:none;padding:4px 12px;border-radius:12px;cursor:pointer;margin-top:4px;" 
+                        <button class="speed-btn" style="background:#2ecc71;color:white;border:none;padding:4px 12px;border-radius:12px;cursor:pointer;margin-top:4px;transition:0.2s;" 
                                 onclick="loadAudio('${audioId}', '${r.voice_file_id}')">
                             ▶️ تحميل الصوت
                         </button>
@@ -601,39 +648,9 @@
         container.innerHTML = html;
     }
 
-    // 5. دالة تحميل الصوت (تُستدعى عند الضغط على زر التحميل)
-    async function loadAudio(audioId, fileId) {
-        const audio = document.getElementById(audioId);
-        if (!audio) return;
-        const source = audio.querySelector('source');
-        if (!source) return;
-
-        // إذا كان الرابط محملاً مسبقاً، لا نعيد التحميل
-        if (source.src && source.src !== '' && source.src !== window.location.href) {
-            return;
-        }
-
-        try {
-            const url = await getAudioUrl(fileId);
-            if (!url) throw new Error('الرابط فارغ');
-            source.src = url;
-            audio.load();
-
-            // إخفاء زر التحميل بعد النجاح
-            const parent = audio.closest('.audio-player-wrapper');
-            if (parent) {
-                const loadBtn = parent.querySelector('button[onclick^="loadAudio"]');
-                if (loadBtn) loadBtn.style.display = 'none';
-            }
-        } catch (e) {
-            alert('❌ فشل تحميل الصوت: ' + e.message);
-            console.error(e);
-        }
-    }
-
-    // ======================= دالة جلب رابط الصوت =======================
+    // 3. دالة جلب رابط الصوت (نفسها ولكن مع تحسين معالجة الأخطاء)
     async function getAudioUrl(fileId) {
-        if (!fileId) return '';
+        if (!fileId) throw new Error('معرف الملف فارغ');
         const res = await fetch(`${BASE_URL}/get_audio_url`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
