@@ -375,16 +375,49 @@
     }
 
     // ======================= دوال API للتسميع =======================
+    // ======================= استبدل دالة assignTashmi بهذا الكود =======================
     async function assignTashmi(recordId) {
+        // العثور على الزر المضغوط داخل البطاقة نفسها
+        const card = document.querySelector(`.card[data-id="${recordId}"]`);
+        if (!card) {
+            console.error('البطاقة غير موجودة');
+            return;
+        }
+        const btn = card.querySelector('.assign-btn');
+        if (!btn) {
+            console.error('زر التولي غير موجود');
+            return;
+        }
+
+        // تعطيل الزر وتغيير النص
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
+
         try {
             const res = await fetch(`${BASE_URL}/tashmi/assign`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ record_id: recordId, admin_id: adminId })
             });
-            if (!res.ok) alert('❌ فشل التولي');
+            const data = await res.json();
+
+            if (!res.ok) {
+                // في حالة فشل الطلب، نعيد تمكين الزر مع رسالة الخطأ
+                alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ غير معروف'}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي التصحيح';
+                return;
+            }
+
+            // في حالة النجاح، نعيد تحميل التسميعات (ستُعاد بناء الواجهة)
             loadTashmiGroups();
-        } catch(e) { alert(e.message); }
+
+        } catch (e) {
+            // في حالة خطأ في الشبكة أو استثناء
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '🔄 تولي التصحيح';
+        }
     }
 
     async function unassignTashmi(recordId) {
