@@ -377,33 +377,42 @@
     // ======================= دوال API للتسميع =======================
     // ======================= استبدل دالة assignTashmi بهذه =======================
     async function assignTashmi(recordId) {
+        console.log('🔄 محاولة تولي التسميع:', recordId);
         const btns = document.querySelectorAll(`.card[data-id="${recordId}"] .assign-btn`);
         const btn = btns[0];
-        if (!btn) return;
+        if (!btn) {
+            console.error('❌ الزر غير موجود للتسميع:', recordId);
+            return;
+        }
         btn.disabled = true;
         btn.textContent = '⏳ جاري...';
         try {
+            console.log('📤 إرسال طلب إلى /tashmi/assign مع:', { record_id: recordId, admin_id: adminId });
             const res = await fetch(`${BASE_URL}/tashmi/assign`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ record_id: recordId, admin_id: adminId })
             });
             const data = await res.json();
-            // التحقق من وجود خطأ في البيانات
+            console.log('📥 استجابة الخادم:', { status: res.status, data: data });
             if (data.error) {
+                console.error('❌ خطأ من الخادم:', data.error);
                 alert(`❌ ${data.error}`);
                 btn.disabled = false;
                 btn.textContent = '🔄 تولي التصحيح';
                 return;
             }
             if (!res.ok) {
+                console.error('❌ استجابة غير ناجحة:', res.status);
                 alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ غير معروف'}`);
                 btn.disabled = false;
                 btn.textContent = '🔄 تولي التصحيح';
                 return;
             }
+            console.log('✅ نجح تولي التسميع:', recordId);
             loadTashmiGroups();
         } catch(e) {
+            console.error('💥 خطأ في الاتصال:', e);
             alert(`❌ خطأ في الاتصال: ${e.message}`);
             btn.disabled = false;
             btn.textContent = '🔄 تولي التصحيح';
@@ -435,36 +444,42 @@
     // ======================= دوال الاستفسارات القديمة =======================
     // ======================= استبدل دالة assignQuestion بهذه =======================
     async function assignQuestion(qId) {
-        // العثور على الزر المخصص لهذا السؤال
+        console.log('🔄 محاولة تولي السؤال:', qId);
         const btns = document.querySelectorAll(`.card[data-id="${qId}"] .assign-btn`);
         const btn = btns[0];
-        if (!btn) return;
-        // تعطيل الزر ومنع الضغط المتكرر
+        if (!btn) {
+            console.error('❌ الزر غير موجود للسؤال:', qId);
+            return;
+        }
         btn.disabled = true;
         btn.textContent = '⏳ جاري...';
         try {
+            console.log('📤 إرسال طلب إلى /assign مع:', { question_id: qId, admin_id: adminId });
             const res = await fetch(`${BASE_URL}/assign`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ question_id: qId, admin_id: adminId })
             });
             const data = await res.json();
-            // التحقق من وجود خطأ في البيانات (حتى لو كانت استجابة 200)
+            console.log('📥 استجابة الخادم:', { status: res.status, data: data });
             if (data.error) {
+                console.error('❌ خطأ من الخادم:', data.error);
                 alert(`❌ ${data.error}`);
                 btn.disabled = false;
                 btn.textContent = '🔄 تولي الرد';
                 return;
             }
             if (!res.ok) {
+                console.error('❌ استجابة غير ناجحة:', res.status);
                 alert(`❌ فشل تولي الرد: ${data.error || 'خطأ غير معروف'}`);
                 btn.disabled = false;
                 btn.textContent = '🔄 تولي الرد';
                 return;
             }
-            // في حالة النجاح، إعادة تحميل البيانات
+            console.log('✅ نجح تولي السؤال:', qId);
             loadQuestions();
         } catch(e) {
+            console.error('💥 خطأ في الاتصال:', e);
             alert(`❌ خطأ في الاتصال: ${e.message}`);
             btn.disabled = false;
             btn.textContent = '🔄 تولي الرد';
