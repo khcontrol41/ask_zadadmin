@@ -375,16 +375,39 @@
     }
 
     // ======================= دوال API للتسميع =======================
+    // ======================= استبدل دالة assignTashmi بهذه =======================
     async function assignTashmi(recordId) {
+        const btns = document.querySelectorAll(`.card[data-id="${recordId}"] .assign-btn`);
+        const btn = btns[0];
+        if (!btn) return;
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
         try {
             const res = await fetch(`${BASE_URL}/tashmi/assign`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ record_id: recordId, admin_id: adminId })
             });
-            if (!res.ok) alert('❌ فشل التولي');
+            const data = await res.json();
+            // التحقق من وجود خطأ في البيانات
+            if (data.error) {
+                alert(`❌ ${data.error}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي التصحيح';
+                return;
+            }
+            if (!res.ok) {
+                alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ غير معروف'}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي التصحيح';
+                return;
+            }
             loadTashmiGroups();
-        } catch(e) { alert(e.message); }
+        } catch(e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '🔄 تولي التصحيح';
+        }
     }
 
     async function unassignTashmi(recordId) {
@@ -410,12 +433,42 @@
     }
 
     // ======================= دوال الاستفسارات القديمة =======================
+    // ======================= استبدل دالة assignQuestion بهذه =======================
     async function assignQuestion(qId) {
+        // العثور على الزر المخصص لهذا السؤال
+        const btns = document.querySelectorAll(`.card[data-id="${qId}"] .assign-btn`);
+        const btn = btns[0];
+        if (!btn) return;
+        // تعطيل الزر ومنع الضغط المتكرر
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
         try {
-            const res = await fetch(`${BASE_URL}/assign`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qId, admin_id: adminId}) });
-            if(!res.ok) alert('فشل');
+            const res = await fetch(`${BASE_URL}/assign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: qId, admin_id: adminId })
+            });
+            const data = await res.json();
+            // التحقق من وجود خطأ في البيانات (حتى لو كانت استجابة 200)
+            if (data.error) {
+                alert(`❌ ${data.error}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي الرد';
+                return;
+            }
+            if (!res.ok) {
+                alert(`❌ فشل تولي الرد: ${data.error || 'خطأ غير معروف'}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي الرد';
+                return;
+            }
+            // في حالة النجاح، إعادة تحميل البيانات
             loadQuestions();
-        } catch(e){ alert(e.message); }
+        } catch(e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '🔄 تولي الرد';
+        }
     }
 
     async function unassignQuestion(qId) {
