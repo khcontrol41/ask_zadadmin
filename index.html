@@ -37,13 +37,11 @@
         .error { color: red; text-align: center; }
         .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 5px 0; }
 
-        /* --- تبويبات التنقل --- */
         .tabs { display: flex; gap: 5px; margin-bottom: 20px; background: #ecf0f1; border-radius: 12px; padding: 5px; }
         .tab-btn { flex: 1; padding: 10px; border: none; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; background: transparent; color: #7f8c8d; transition: 0.3s; }
         .tab-btn.active { background: white; color: #2c3e50; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .tab-btn:hover { background: rgba(255,255,255,0.5); }
 
-        /* --- شريط المجموعات (Tashmi) --- */
         .groups-scroll {
             display: flex;
             align-items: center;
@@ -71,41 +69,18 @@
             gap: 6px;
             font-weight: 500;
         }
-        .group-tab.active {
-            background: #2c3e50;
-            color: white;
-            box-shadow: 0 2px 8px rgba(44,62,80,0.3);
-        }
-        .group-tab .badge {
-            background: #e74c3c;
-            color: white;
-            padding: 0 8px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: bold;
-        }
+        .group-tab.active { background: #2c3e50; color: white; box-shadow: 0 2px 8px rgba(44,62,80,0.3); }
+        .group-tab .badge { background: #e74c3c; color: white; padding: 0 8px; border-radius: 20px; font-size: 11px; font-weight: bold; }
         .group-tab.active .badge { background: rgba(255,255,255,0.3); color: white; }
         .group-tab .badge.zero { background: #bdc3c7; color: #7f8c8d; }
 
-        /* --- مشغل الصوت مع أزرار السرعة --- */
         .audio-player-wrapper { margin: 10px 0; background: #f8f9fa; padding: 12px; border-radius: 10px; }
         .audio-player-wrapper audio { width: 100%; outline: none; }
         .speed-btns { display: flex; gap: 5px; margin-top: 8px; flex-wrap: wrap; }
-        .speed-btn {
-            background: #3498db;
-            color: white;
-            border: none;
-            padding: 4px 14px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: bold;
-            transition: 0.2s;
-        }
+        .speed-btn { background: #3498db; color: white; border: none; padding: 4px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: bold; transition: 0.2s; }
         .speed-btn:hover { background: #2980b9; transform: scale(1.05); }
         .speed-btn.active-speed { background: #e67e22; box-shadow: 0 2px 6px rgba(230,126,34,0.4); }
 
-        /* --- النوافذ المنبثقة والإحصائيات --- */
         .header-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
         .header-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
         .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -132,13 +107,11 @@
         </div>
     </div>
 
-    <!-- تبويبات التنقل -->
     <div class="tabs">
         <button class="tab-btn active" id="tabAsk" onclick="switchTab('ask')">📩 الاستفسارات</button>
         <button class="tab-btn" id="tabTashmi" onclick="switchTab('tashmi')">🎙️ التسميع</button>
     </div>
 
-    <!-- ===== تبويب الاستفسارات ===== -->
     <div id="ask-tab">
         <div class="stats-bar">
             <div>⏳ في الانتظار: <span class="stats-pending" id="pendingCount">0</span></div>
@@ -149,12 +122,8 @@
         <div id="questions-container"><div class="loader">⏳ جاري التحميل...</div></div>
     </div>
 
-    <!-- ===== تبويب التسميع ===== -->
     <div id="tashmi-tab" style="display: none;">
-        <!-- شريط المجموعات -->
-        <div class="groups-scroll" id="groupsContainer">
-            <!-- سيتم توليد الأزرار بواسطة JavaScript -->
-        </div>
+        <div class="groups-scroll" id="groupsContainer"></div>
         <div class="stats-bar">
             <div>⏳ معلق: <span class="stats-tashmi-pending" id="tashmiPendingCount">0</span></div>
             <div>📊 المجموع: <span class="stats-total" id="tashmiTotalCount">0</span></div>
@@ -200,10 +169,11 @@
     }
 
     async function loadQuestions() {
+        console.log('🔄 loadQuestions بدأت');
         const container = document.getElementById('questions-container');
         const refreshBtn = document.getElementById('refreshBtn');
         refreshBtn.disabled = true;
-        if (!adminId) { container.innerHTML = '<div class="error">❌ لم نتمكن من التعرف عليك.</div>'; refreshBtn.disabled=false; return; }
+        container.innerHTML = '<div class="loader">⏳ جاري التحميل...</div>';
         try {
             const res = await fetch(`${BASE_URL}/get_questions`, {
                 method: 'POST',
@@ -211,41 +181,57 @@
                 body: JSON.stringify({ user_id: adminId })
             });
             if (!res.ok) throw new Error((await res.json()).error || 'فشل');
-            currentQuestions = await res.json();
-            const pending = currentQuestions.filter(q => q.status === 'pending').length;
-            const processing = currentQuestions.filter(q => q.status === 'processing').length;
-            const answered = currentQuestions.filter(q => q.status === 'answered').length;
-            document.getElementById('pendingCount').textContent = pending;
-            document.getElementById('processingCount').textContent = processing;
-            document.getElementById('answeredCount').textContent = answered;
-            document.getElementById('totalCount').textContent = currentQuestions.length;
-            if (currentQuestions.length === 0) { container.innerHTML = '<div class="loader" style="color:#27ae60;">✨ لا توجد استفسارات</div>'; refreshBtn.disabled=false; return; }
+            const data = await res.json();
+            currentQuestions = data;
+            document.getElementById('pendingCount').textContent = data.filter(q => q.status === 'pending').length;
+            document.getElementById('processingCount').textContent = data.filter(q => q.status === 'processing').length;
+            document.getElementById('answeredCount').textContent = data.filter(q => q.status === 'answered').length;
+            document.getElementById('totalCount').textContent = data.length;
+            if (data.length === 0) {
+                container.innerHTML = '<div class="loader" style="color:#27ae60;">✨ لا توجد استفسارات</div>';
+                return;
+            }
             let html = '';
-            for (const q of currentQuestions) {
+            for (const q of data) {
                 const isAnswered = q.status === 'answered';
                 const isProcessing = q.status === 'processing';
                 const isAssignedToMe = isProcessing && q.assigned_to == adminId;
                 const isAssignedToOther = isProcessing && !isAssignedToMe;
                 let badge = '', cardClass = '', contentHtml = '';
-                if (isAnswered) { badge = '<span class="answered-badge">✅ تم الرد</span>'; cardClass = 'answered'; contentHtml = `<div class="reply-text"><strong>الرد:</strong> ${q.reply || ''}</div>`; }
-                else if (isAssignedToOther) { badge = '<span class="processing-badge">🔄 قيد المعالجة</span>'; cardClass = 'processing'; contentHtml = `<div class="processing-text">⏳ يُعالج من قبل مشرف آخر.</div>`; }
-                else {
+                if (isAnswered) {
+                    badge = '<span class="answered-badge">✅ تم الرد</span>';
+                    cardClass = 'answered';
+                    contentHtml = `<div class="reply-text"><strong>الرد:</strong> ${q.reply || ''}</div>`;
+                } else if (isAssignedToOther) {
+                    badge = '<span class="processing-badge">🔄 قيد المعالجة</span>';
+                    cardClass = 'processing';
+                    contentHtml = `<div class="processing-text">⏳ يُعالج من قبل مشرف آخر.</div>`;
+                } else {
                     const isMyProcessing = isProcessing && isAssignedToMe;
                     badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="pending-badge">⏳ في الانتظار</span>';
-                    let actionsHtml = isMyProcessing ? `<button class="unassign-btn" onclick="unassignQuestion(${q.id})">↩️ إلغاء التولي</button>` : `<button class="assign-btn" onclick="assignQuestion(${q.id})">🔄 تولي الرد</button>`;
-                    contentHtml = `<div class="actions">${actionsHtml}</div>
-                                   <textarea class="reply-area" placeholder="اكتب ردك..." id="reply-${q.id}" ${isMyProcessing ? '' : 'disabled'}></textarea>
-                                   <button class="send-btn" onclick="sendReply(${q.id})" ${isMyProcessing ? '' : 'disabled'}>📤 إرسال الرد</button>`;
+                    let actionsHtml = isMyProcessing ?
+                        `<button class="unassign-btn" onclick="unassignQuestion(${q.id})">↩️ إلغاء التولي</button>` :
+                        `<button class="assign-btn" onclick="assignQuestion(${q.id})">🔄 تولي الرد</button>`;
+                    contentHtml = `
+                        <div class="actions">${actionsHtml}</div>
+                        <textarea class="reply-area" placeholder="اكتب ردك..." id="reply-${q.id}" ${isMyProcessing ? '' : 'disabled'}></textarea>
+                        <button class="send-btn" onclick="sendReply(${q.id})" ${isMyProcessing ? '' : 'disabled'}>📤 إرسال الرد</button>
+                    `;
                 }
                 html += `<div class="card ${cardClass}" data-id="${q.id}">${badge}<div class="user">${formatUsername(q.username)}</div><div class="question">"${q.question}"</div>${contentHtml}<div style="font-size:12px;color:#95a5a6;margin-top:5px;">📅 ${q.created_at || ''}</div></div>`;
             }
             container.innerHTML = html;
-        } catch(e) { container.innerHTML = `<div class="error">❌ خطأ: ${e.message}</div>`; }
+            console.log('✅ loadQuestions انتهت بنجاح');
+        } catch(e) {
+            console.error('❌ خطأ في loadQuestions:', e);
+            container.innerHTML = `<div class="error">❌ خطأ: ${e.message}</div>`;
+        }
         finally { refreshBtn.disabled = false; }
     }
 
-    // ======================= دوال التسميع (مع دعم الصوتيات) =======================
+    // ======================= دوال التسميع =======================
     async function loadTashmiGroups() {
+        console.log('🔄 loadTashmiGroups بدأت');
         const container = document.getElementById('tashmi-container');
         const refreshBtn = document.getElementById('refreshBtn');
         refreshBtn.disabled = true;
@@ -273,11 +259,16 @@
             });
             groupsContainer.innerHTML = groupsHtml;
             await renderTashmiRecords(data.filter(r => r.group_number === currentGroup || currentGroup === 'all'));
-        } catch(e) { container.innerHTML = `<div class="error">❌ ${e.message}</div>`; }
+            console.log('✅ loadTashmiGroups انتهت بنجاح');
+        } catch(e) {
+            console.error('❌ خطأ في loadTashmiGroups:', e);
+            container.innerHTML = `<div class="error">❌ ${e.message}</div>`;
+        }
         finally { refreshBtn.disabled = false; }
     }
 
     async function switchGroup(groupId) {
+        console.log('🔄 switchGroup:', groupId);
         currentGroup = groupId;
         document.querySelectorAll('.group-tab').forEach(btn => btn.classList.remove('active'));
         const activeBtn = document.querySelector(`.group-tab[data-group="${groupId}"]`);
@@ -286,8 +277,8 @@
         await renderTashmiRecords(filtered);
     }
 
-    // ✅ الدالة المعدلة: تستخدم getAudioUrl للحصول على رابط الصوت الصحيح
     async function renderTashmiRecords(records) {
+        console.log('🔄 renderTashmiRecords بدأت مع', records.length, 'تسجيلات');
         const container = document.getElementById('tashmi-container');
         if (records.length === 0) {
             container.innerHTML = '<div class="loader" style="color:#27ae60;">🎙️ لا توجد تسميعات في هذه المجموعة</div>';
@@ -301,18 +292,21 @@
             const isAssignedToOther = isProcessing && !isAssignedToMe;
             let badge = '', cardClass = 'tashmi-card', contentHtml = '';
 
-            if (isAnswered) { badge = '<span class="answered-badge">✅ تم الرد</span>'; contentHtml = `<div class="reply-text"><strong>ملاحظة المعلم:</strong> ${r.teacher_note || ''}</div>`; }
-            else if (isAssignedToOther) { badge = '<span class="processing-badge">🔄 قيد المعالجة</span>'; contentHtml = `<div class="processing-text">⏳ يُعالج من قبل مشرف آخر.</div>`; }
-            else {
+            if (isAnswered) {
+                badge = '<span class="answered-badge">✅ تم الرد</span>';
+                contentHtml = `<div class="reply-text"><strong>ملاحظة المعلم:</strong> ${r.teacher_note || ''}</div>`;
+            } else if (isAssignedToOther) {
+                badge = '<span class="processing-badge">🔄 قيد المعالجة</span>';
+                contentHtml = `<div class="processing-text">⏳ يُعالج من قبل مشرف آخر.</div>`;
+            } else {
                 const isMyProcessing = isProcessing && isAssignedToMe;
                 badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="tashmi-badge">⏳ في الانتظار</span>';
                 const audioId = `audio-${r.id}`;
-                // استخدام getAudioUrl للحصول على الرابط الصحيح
                 let audioSrc = '';
                 try {
                     audioSrc = await getAudioUrl(r.voice_file_id);
                 } catch(e) {
-                    console.error('فشل جلب رابط الصوت:', e);
+                    console.error('فشل جلب الصوت:', e);
                     audioSrc = '';
                 }
                 contentHtml = `
@@ -341,23 +335,24 @@
             html += `<div class="card ${cardClass}" data-id="${r.id}">${badge}<div class="user">👤 ${formatUsername(r.username)} | <strong>المجموعة ${r.group_number}</strong></div>${contentHtml}<div style="font-size:12px;color:#95a5a6;margin-top:5px;">📅 ${r.created_at || ''}</div></div>`;
         }
         container.innerHTML = html;
+        console.log('✅ renderTashmiRecords انتهت');
     }
 
-    // ✅ الدالة الجديدة: تجلب رابط الصوت من الخادم
     async function getAudioUrl(fileId) {
         if (!fileId) return '';
-        const res = await fetch(`${BASE_URL}/get_audio_url`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ file_id: fileId, admin_id: adminId })
-        });
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || 'فشل جلب الرابط');
+        try {
+            const res = await fetch(`${BASE_URL}/get_audio_url`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file_id: fileId, admin_id: adminId })
+            });
+            if (!res.ok) throw new Error('فشل جلب الرابط');
+            const data = await res.json();
+            return data.url || '';
+        } catch(e) {
+            console.error('خطأ في جلب الصوت:', e);
+            return '';
         }
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        return data.url;
     }
 
     function setSpeed(audioId, rate) {
@@ -374,30 +369,31 @@
         }
     }
 
-    // ======================= دوال API للتسميع =======================
-    // ======================= استبدل دالة assignTashmi بهذه =======================
+    // ======================= دوال التولي المعدلة =======================
     async function assignTashmi(recordId) {
-        console.log('🔄 محاولة تولي التسميع:', recordId);
+        console.log('🔄 assignTashmi بدأت للمعرف:', recordId);
+        // العثور على الزر في البطاقة الحالية
         const btns = document.querySelectorAll(`.card[data-id="${recordId}"] .assign-btn`);
         const btn = btns[0];
         if (!btn) {
             console.error('❌ الزر غير موجود للتسميع:', recordId);
             return;
         }
+        // تعطيل الزر ومنع الضغط المتكرر
         btn.disabled = true;
         btn.textContent = '⏳ جاري...';
         try {
-            console.log('📤 إرسال طلب إلى /tashmi/assign مع:', { record_id: recordId, admin_id: adminId });
             const res = await fetch(`${BASE_URL}/tashmi/assign`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ record_id: recordId, admin_id: adminId })
             });
             const data = await res.json();
-            console.log('📥 استجابة الخادم:', { status: res.status, data: data });
+            console.log('📥 استجابة /tashmi/assign:', data);
             if (data.error) {
                 console.error('❌ خطأ من الخادم:', data.error);
                 alert(`❌ ${data.error}`);
+                // إعادة تمكين الزر
                 btn.disabled = false;
                 btn.textContent = '🔄 تولي التصحيح';
                 return;
@@ -409,8 +405,13 @@
                 btn.textContent = '🔄 تولي التصحيح';
                 return;
             }
+            // نجاح التولي
             console.log('✅ نجح تولي التسميع:', recordId);
-            loadTashmiGroups();
+            // تغيير الزر إلى "تم التولي" أو تعطيله نهائياً
+            btn.textContent = '✅ تم التولي';
+            btn.disabled = true;
+            // إعادة تحميل القائمة لتحديث جميع البطاقات
+            await loadTashmiGroups();
         } catch(e) {
             console.error('💥 خطأ في الاتصال:', e);
             alert(`❌ خطأ في الاتصال: ${e.message}`);
@@ -419,9 +420,66 @@
         }
     }
 
+    async function assignQuestion(qId) {
+        console.log('🔄 assignQuestion بدأت للمعرف:', qId);
+        const btns = document.querySelectorAll(`.card[data-id="${qId}"] .assign-btn`);
+        const btn = btns[0];
+        if (!btn) {
+            console.error('❌ الزر غير موجود للسؤال:', qId);
+            return;
+        }
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
+        try {
+            const res = await fetch(`${BASE_URL}/assign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: qId, admin_id: adminId })
+            });
+            const data = await res.json();
+            console.log('📥 استجابة /assign:', data);
+            if (data.error) {
+                console.error('❌ خطأ من الخادم:', data.error);
+                alert(`❌ ${data.error}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي الرد';
+                return;
+            }
+            if (!res.ok) {
+                console.error('❌ استجابة غير ناجحة:', res.status);
+                alert(`❌ فشل تولي الرد: ${data.error || 'خطأ غير معروف'}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي الرد';
+                return;
+            }
+            console.log('✅ نجح تولي السؤال:', qId);
+            btn.textContent = '✅ تم التولي';
+            btn.disabled = true;
+            await loadQuestions();
+        } catch(e) {
+            console.error('💥 خطأ في الاتصال:', e);
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '🔄 تولي الرد';
+        }
+    }
+
+    // ======================= دوال أخرى =======================
     async function unassignTashmi(recordId) {
-        alert('سيتم إلغاء التولي تلقائياً بعد 15 دقيقة، أو يمكن للمشرف الآخر توليها.');
+        alert('سيتم إلغاء التولي تلقائياً بعد 15 دقيقة.');
         loadTashmiGroups();
+    }
+
+    async function unassignQuestion(qId) {
+        try {
+            const res = await fetch(`${BASE_URL}/unassign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: qId, admin_id: adminId })
+            });
+            if (!res.ok) alert('فشل');
+            loadQuestions();
+        } catch(e){ alert(e.message); }
     }
 
     async function sendTashmiReply(recordId) {
@@ -441,67 +499,18 @@
         } catch(e) { alert(`❌ ${e.message}`); btn.disabled = false; btn.textContent = '📤 إرسال الملاحظة'; }
     }
 
-    // ======================= دوال الاستفسارات القديمة =======================
-    // ======================= استبدل دالة assignQuestion بهذه =======================
-    async function assignQuestion(qId) {
-        console.log('🔄 محاولة تولي السؤال:', qId);
-        const btns = document.querySelectorAll(`.card[data-id="${qId}"] .assign-btn`);
-        const btn = btns[0];
-        if (!btn) {
-            console.error('❌ الزر غير موجود للسؤال:', qId);
-            return;
-        }
-        btn.disabled = true;
-        btn.textContent = '⏳ جاري...';
-        try {
-            console.log('📤 إرسال طلب إلى /assign مع:', { question_id: qId, admin_id: adminId });
-            const res = await fetch(`${BASE_URL}/assign`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question_id: qId, admin_id: adminId })
-            });
-            const data = await res.json();
-            console.log('📥 استجابة الخادم:', { status: res.status, data: data });
-            if (data.error) {
-                console.error('❌ خطأ من الخادم:', data.error);
-                alert(`❌ ${data.error}`);
-                btn.disabled = false;
-                btn.textContent = '🔄 تولي الرد';
-                return;
-            }
-            if (!res.ok) {
-                console.error('❌ استجابة غير ناجحة:', res.status);
-                alert(`❌ فشل تولي الرد: ${data.error || 'خطأ غير معروف'}`);
-                btn.disabled = false;
-                btn.textContent = '🔄 تولي الرد';
-                return;
-            }
-            console.log('✅ نجح تولي السؤال:', qId);
-            loadQuestions();
-        } catch(e) {
-            console.error('💥 خطأ في الاتصال:', e);
-            alert(`❌ خطأ في الاتصال: ${e.message}`);
-            btn.disabled = false;
-            btn.textContent = '🔄 تولي الرد';
-        }
-    }
-
-    async function unassignQuestion(qId) {
-        try {
-            const res = await fetch(`${BASE_URL}/unassign`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qId, admin_id: adminId}) });
-            if(!res.ok) alert('فشل');
-            loadQuestions();
-        } catch(e){ alert(e.message); }
-    }
-
     async function sendReply(qId) {
         const textarea = document.getElementById(`reply-${qId}`);
         const reply = textarea.value.trim();
         if (!reply) { alert('اكتب الرد'); return; }
         const btn = textarea.nextElementSibling; btn.disabled = true; btn.textContent = '⏳...';
         try {
-            const res = await fetch(`${BASE_URL}/reply`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question_id: qId, reply_text: reply, admin_id: adminId}) });
-            if(!res.ok) throw new Error((await res.json()).error);
+            const res = await fetch(`${BASE_URL}/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: qId, reply_text: reply, admin_id: adminId })
+            });
+            if (!res.ok) throw new Error((await res.json()).error);
             loadQuestions();
         } catch(e){ alert(e.message); btn.disabled = false; btn.textContent = '📤 إرسال الرد'; }
     }
@@ -509,7 +518,11 @@
     async function deleteAnswered() {
         if(!confirm('⚠️ حذف جميع الاستفسارات المجاب عليها؟')) return;
         try {
-            const res = await fetch(`${BASE_URL}/delete_answered`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({admin_id: adminId}) });
+            const res = await fetch(`${BASE_URL}/delete_answered`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ admin_id: adminId })
+            });
             const data = await res.json();
             alert(`✅ تم حذف ${data.deleted || 0} استفسار`);
             loadQuestions();
@@ -518,7 +531,10 @@
 
     // ======================= تشغيل التطبيق =======================
     document.addEventListener('DOMContentLoaded', () => {
-        if (!adminId) { document.body.innerHTML = '<div class="error" style="padding:40px;">❌ لم نتمكن من التعرف عليك. تأكد من فتح اللوحة من داخل تيليجرام.</div>'; return; }
+        if (!adminId) {
+            document.body.innerHTML = '<div class="error" style="padding:40px;">❌ لم نتمكن من التعرف عليك. تأكد من فتح اللوحة من داخل تيليجرام.</div>';
+            return;
+        }
         switchTab('ask');
         window.BOT_TOKEN = '';
     });
