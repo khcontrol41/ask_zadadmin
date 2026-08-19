@@ -286,44 +286,291 @@
         await renderTashmiRecords(filtered);
     }
 
-    // ✅ الدالة المعدلة: تستخدم getAudioUrl للحصول على رابط الصوت الصحيح
+    // ========== دوال التسميع المعدلة (حل جذري) ==========
+
+    // 1. دالة تولي التصحيح (تعمل لكل الصوتيات)
+    async function assignTashmi(recordId) {
+        // العثور على البطاقة والزر
+        const card = document.querySelector(`.card[data-id="${recordId}"]`);
+        if (!card) return;
+        const btn = card.querySelector('.assign-btn');
+        if (!btn) return;
+
+        // منع الضغط المتكرر
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
+
+        try {
+            const res = await fetch(`${BASE_URL}/tashmi/assign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ record_id: recordId, admin_id: adminId })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                alert(`❌ فشل التولي: ${data.error || 'خطأ'}`);
+                btn.disabled = false;
+                btn.textContent = '🔄 تولي التصحيح';
+                return;
+            }
+
+            // ✅ نجاح التولي: نحدّث البطاقة مباشرة دون إعادة تحميل القائمة
+            // 1. تغيير حالة البطاقة
+            const badge = card.querySelector('.tashmi-badge, .processing-badge');
+            if (badge) {
+                badge.className = 'processing-badge';
+                badge.textContent = '🔄 أنت تعالج';
+            }
+
+            // 2. تغيير الزر إلى "إلغاء التولي"
+            btn.className = 'unassign-btn';
+            btn.textContent = '↩️ إلغاء التولي';
+            btn.onclick = function() { unassignTashmi(recordId); };
+
+            // 3. تمكين حقل الملاحظة وزر الإرسال
+            const textarea = card.querySelector('.reply-area');
+            const sendBtn = card.querySelector('.send-btn');
+            if (textarea) {
+                textarea.disabled = false;
+                textarea.placeholder = 'اكتب ملاحظتك على التسميع...';
+            }
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.textContent = '📤 إرسال الملاحظة';
+                sendBtn.onclick = function() { sendTashmiReply(recordId); };
+            }
+
+            // 4. تحديث العداد العلوي (تقليل عدد المعلقات)
+            const pendingSpan = document.getElementById('tashmiPendingCount');
+            if (pendingSpan) {
+                const current = parseInt(pendingSpan.textContent) || 0;
+                pendingSpan.textContent = Math.max(0, current - 1);
+            }
+
+            // 5. تحديث عداد المجموعة في شريط الأزرار
+            const group = card.querySelector('.user strong')?.textContent?.replace('المجموعة ', '') || '';
+            if (group) {
+                const groupBtn = document.querySelector(`.group-tab[data-group="${group}"] .badge`);
+                if (groupBtn) {
+                    const current = parseInt(groupBtn.textContent) || 0;
+                    groupBtn.textContent = Math.max(0, current - 1);
+                    if (parseInt(groupBtn.textContent) === 0) {
+                        groupBtn.className = 'badge zero';
+                    }
+                }
+            }
+
+        } catch (e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '🔄 تولي التصحيح';
+        }
+    }
+
+    // 2. دالة إلغاء التولي (تحدث البطاقة مباشرة)
+    async function unassignTashmi(recordId) {
+        const card = document.querySelector(`.card[data-id="${recordId}"]`);
+        if (!card) return;
+        const btn = card.querySelector('.unassign-btn');
+        if (!btn) return;
+
+        if (btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
+
+        try {
+            // نرسل طلب إلغاء التولي (نستخدم نقطة /tashmi/assign مع status مختلف)
+            // لكن بما أننا لا نملك نقطة unassign، سنعتبرها ملغاة ونعيد ضبطها محليًا
+            // (أو يمكنك إضافة نقطة /tashmi/unassign لاحقًا)
+            // الحل المؤقت: نعيد ضبط البطاقة إلى حالة الانتظار
+            alert('⏳ سيتم إلغاء التولي خلال 15 دقيقة تلقائيًا، أو يمكنك تحديث الصفحة');
+
+            // نعيد ضبط البطاقة محليًا (حتى لو لم ينجح الطلب، سيبقى الشكل متسقًا)
+            const badge = card.querySelector('.processing-badge');
+            if (badge) {
+                badge.className = 'tashmi-badge';
+                badge.textContent = '⏳ في الانتظار';
+            }
+
+            btn.className = 'assign-btn';
+            btn.textContent = '🔄 تولي التصحيح';
+            btn.onclick = function() { assignTashmi(recordId); };
+            btn.disabled = false;
+
+            const textarea = card.querySelector('.reply-area');
+            const sendBtn = card.querySelector('.send-btn');
+            if (textarea) {
+                textarea.disabled = true;
+                textarea.value = '';
+                textarea.placeholder = 'اكتب ملاحظتك على التسميع...';
+            }
+            if (sendBtn) {
+                sendBtn.disabled = true;
+                sendBtn.textContent = '📤 إرسال الملاحظة';
+            }
+
+            // زيادة العداد العلوي
+            const pendingSpan = document.getElementById('tashmiPendingCount');
+            if (pendingSpan) {
+                const current = parseInt(pendingSpan.textContent) || 0;
+                pendingSpan.textContent = current + 1;
+            }
+
+            // زيادة عداد المجموعة
+            const group = card.querySelector('.user strong')?.textContent?.replace('المجموعة ', '') || '';
+            if (group) {
+                const groupBtn = document.querySelector(`.group-tab[data-group="${group}"] .badge`);
+                if (groupBtn) {
+                    const current = parseInt(groupBtn.textContent) || 0;
+                    groupBtn.textContent = current + 1;
+                    groupBtn.className = 'badge';
+                }
+            }
+
+            // إعادة تحميل القائمة بعد 3 ثوانٍ للتأكد من التزامن مع الخادم
+            setTimeout(() => loadTashmiGroups(), 3000);
+
+        } catch (e) {
+            alert(`❌ خطأ: ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '↩️ إلغاء التولي';
+        }
+    }
+
+    // 3. دالة إرسال الملاحظة (تحدث البطاقة مباشرة)
+    async function sendTashmiReply(recordId) {
+        const card = document.querySelector(`.card[data-id="${recordId}"]`);
+        if (!card) return;
+        const textarea = card.querySelector('.reply-area');
+        const note = textarea?.value?.trim();
+        if (!note) { alert('الرجاء كتابة الملاحظة'); return; }
+
+        const btn = card.querySelector('.send-btn');
+        if (!btn || btn.disabled) return;
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
+
+        try {
+            const res = await fetch(`${BASE_URL}/tashmi/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ record_id: recordId, note_text: note, admin_id: adminId })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                alert(`❌ فشل الإرسال: ${data.error || 'خطأ'}`);
+                btn.disabled = false;
+                btn.textContent = '📤 إرسال الملاحظة';
+                return;
+            }
+
+            // ✅ نجاح الإرسال: تحديث البطاقة مباشرة
+            const badge = card.querySelector('.processing-badge, .tashmi-badge');
+            if (badge) {
+                badge.className = 'answered-badge';
+                badge.textContent = '✅ تم الرد';
+            }
+
+            // إضافة الملاحظة كـ "تم الرد"
+            const replyDiv = document.createElement('div');
+            replyDiv.className = 'reply-text';
+            replyDiv.innerHTML = `<strong>ملاحظة المعلم:</strong> ${note}`;
+
+            // إزالة عناصر التحكم
+            const actionsDiv = card.querySelector('.actions');
+            if (actionsDiv) actionsDiv.remove();
+            const audioWrapper = card.querySelector('.audio-player-wrapper');
+            if (audioWrapper) audioWrapper.remove();
+            if (textarea) textarea.remove();
+            btn.remove();
+
+            // إضافة الرد
+            const userDiv = card.querySelector('.user');
+            if (userDiv && replyDiv) {
+                userDiv.after(replyDiv);
+            }
+
+            // تحديث العداد العلوي (تقليل عدد المعلقات)
+            const pendingSpan = document.getElementById('tashmiPendingCount');
+            if (pendingSpan) {
+                const current = parseInt(pendingSpan.textContent) || 0;
+                pendingSpan.textContent = Math.max(0, current - 1);
+            }
+
+            // تحديث عداد المجموعة
+            const group = card.querySelector('.user strong')?.textContent?.replace('المجموعة ', '') || '';
+            if (group) {
+                const groupBtn = document.querySelector(`.group-tab[data-group="${group}"] .badge`);
+                if (groupBtn) {
+                    const current = parseInt(groupBtn.textContent) || 0;
+                    groupBtn.textContent = Math.max(0, current - 1);
+                    if (parseInt(groupBtn.textContent) === 0) {
+                        groupBtn.className = 'badge zero';
+                    }
+                }
+            }
+
+            // إعادة تحميل القائمة بعد 2 ثانية للتأكد من التزامن مع الخادم
+            setTimeout(() => loadTashmiGroups(), 2000);
+
+        } catch (e) {
+            alert(`❌ خطأ في الاتصال: ${e.message}`);
+            btn.disabled = false;
+            btn.textContent = '📤 إرسال الملاحظة';
+        }
+    }
+
+    // 4. دالة عرض التسميعات (سريعة بدون تحميل الصوتيات مسبقًا)
     async function renderTashmiRecords(records) {
         const container = document.getElementById('tashmi-container');
         if (records.length === 0) {
             container.innerHTML = '<div class="loader" style="color:#27ae60;">🎙️ لا توجد تسميعات في هذه المجموعة</div>';
             return;
         }
+
         let html = '';
         for (const r of records) {
             const isAnswered = r.status === 'answered';
             const isProcessing = r.status === 'processing';
             const isAssignedToMe = isProcessing && r.assigned_to == adminId;
             const isAssignedToOther = isProcessing && !isAssignedToMe;
+
             let badge = '', cardClass = 'tashmi-card', contentHtml = '';
 
-            if (isAnswered) { badge = '<span class="answered-badge">✅ تم الرد</span>'; contentHtml = `<div class="reply-text"><strong>ملاحظة المعلم:</strong> ${r.teacher_note || ''}</div>`; }
-            else if (isAssignedToOther) { badge = '<span class="processing-badge">🔄 قيد المعالجة</span>'; contentHtml = `<div class="processing-text">⏳ يُعالج من قبل مشرف آخر.</div>`; }
-            else {
+            if (isAnswered) {
+                badge = '<span class="answered-badge">✅ تم الرد</span>';
+                contentHtml = `<div class="reply-text"><strong>ملاحظة المعلم:</strong> ${r.teacher_note || ''}</div>`;
+            } else if (isAssignedToOther) {
+                badge = '<span class="processing-badge">🔄 قيد المعالجة</span>';
+                contentHtml = `<div class="processing-text">⏳ يُعالج من قبل مشرف آخر.</div>`;
+            } else {
                 const isMyProcessing = isProcessing && isAssignedToMe;
-                badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="tashmi-badge">⏳ في الانتظار</span>';
+                badge = isMyProcessing ?
+                    '<span class="processing-badge">🔄 أنت تعالج</span>' :
+                    '<span class="tashmi-badge">⏳ في الانتظار</span>';
+
                 const audioId = `audio-${r.id}`;
-                // استخدام getAudioUrl للحصول على الرابط الصحيح
-                let audioSrc = '';
-                try {
-                    audioSrc = await getAudioUrl(r.voice_file_id);
-                } catch(e) {
-                    console.error('فشل جلب رابط الصوت:', e);
-                    audioSrc = '';
-                }
+                const durationText = (r.duration && r.duration > 0) ?
+                    `⏱️ ${Math.floor(r.duration/60)}:${(r.duration%60).toString().padStart(2,'0')}` :
+                    '⏱️ المدة غير معروفة';
+
+                // ✅ زر تحميل الصوت (بدون تحميل مسبق)
                 contentHtml = `
                     <div class="audio-player-wrapper">
-                        <audio controls id="${audioId}">
-                            <source src="${audioSrc}" type="audio/mp4">
-                            <source src="${audioSrc}" type="audio/mpeg">
-                            <source src="${audioSrc}">
+                        <audio controls preload="none" id="${audioId}">
+                            <source src="" type="audio/mp4">
+                            <source src="" type="audio/mpeg">
                             المتصفح لا يدعم تشغيل الصوت.
                         </audio>
-                        <div class="speed-btns">
+                        <div style="font-size:12px;color:#7f8c8d;margin-top:4px;">${durationText}</div>
+                        <button class="speed-btn" style="background:#2ecc71;color:white;border:none;padding:4px 12px;border-radius:12px;cursor:pointer;margin-top:4px;" 
+                                onclick="loadAudio('${audioId}', '${r.voice_file_id}')">
+                            ▶️ تحميل الصوت
+                        </button>
+                        <div class="speed-btns" style="margin-top:6px;">
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 1)">1x</button>
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 1.5)">1.5x</button>
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 2)">2x</button>
@@ -332,18 +579,59 @@
                         </div>
                     </div>
                     <div class="actions">
-                        ${isMyProcessing ? `<button class="unassign-btn" onclick="unassignTashmi(${r.id})">↩️ إلغاء التولي</button>` : `<button class="assign-btn" onclick="assignTashmi(${r.id})">🔄 تولي التصحيح</button>`}
+                        ${isMyProcessing ?
+                            `<button class="unassign-btn" onclick="unassignTashmi(${r.id})">↩️ إلغاء التولي</button>` :
+                            `<button class="assign-btn" onclick="assignTashmi(${r.id})">🔄 تولي التصحيح</button>`
+                        }
                     </div>
                     <textarea class="reply-area" placeholder="اكتب ملاحظتك على التسميع..." id="tnote-${r.id}" ${isMyProcessing ? '' : 'disabled'}></textarea>
                     <button class="send-btn" onclick="sendTashmiReply(${r.id})" ${isMyProcessing ? '' : 'disabled'}>📤 إرسال الملاحظة</button>
                 `;
             }
-            html += `<div class="card ${cardClass}" data-id="${r.id}">${badge}<div class="user">👤 ${formatUsername(r.username)} | <strong>المجموعة ${r.group_number}</strong></div>${contentHtml}<div style="font-size:12px;color:#95a5a6;margin-top:5px;">📅 ${r.created_at || ''}</div></div>`;
+
+            html += `
+                <div class="card ${cardClass}" data-id="${r.id}">
+                    ${badge}
+                    <div class="user">👤 ${formatUsername(r.username)} | <strong>المجموعة ${r.group_number}</strong></div>
+                    ${contentHtml}
+                    <div style="font-size:12px;color:#95a5a6;margin-top:5px;">📅 ${r.created_at || ''}</div>
+                </div>
+            `;
         }
         container.innerHTML = html;
     }
 
-    // ✅ الدالة الجديدة: تجلب رابط الصوت من الخادم
+    // 5. دالة تحميل الصوت (تُستدعى عند الضغط على زر التحميل)
+    async function loadAudio(audioId, fileId) {
+        const audio = document.getElementById(audioId);
+        if (!audio) return;
+        const source = audio.querySelector('source');
+        if (!source) return;
+
+        // إذا كان الرابط محملاً مسبقاً، لا نعيد التحميل
+        if (source.src && source.src !== '' && source.src !== window.location.href) {
+            return;
+        }
+
+        try {
+            const url = await getAudioUrl(fileId);
+            if (!url) throw new Error('الرابط فارغ');
+            source.src = url;
+            audio.load();
+
+            // إخفاء زر التحميل بعد النجاح
+            const parent = audio.closest('.audio-player-wrapper');
+            if (parent) {
+                const loadBtn = parent.querySelector('button[onclick^="loadAudio"]');
+                if (loadBtn) loadBtn.style.display = 'none';
+            }
+        } catch (e) {
+            alert('❌ فشل تحميل الصوت: ' + e.message);
+            console.error(e);
+        }
+    }
+
+    // ======================= دالة جلب رابط الصوت =======================
     async function getAudioUrl(fileId) {
         if (!fileId) return '';
         const res = await fetch(`${BASE_URL}/get_audio_url`, {
@@ -372,74 +660,6 @@
                 if (index !== -1) btns[index].classList.add('active-speed');
             }
         }
-    }
-
-    // ======================= دوال API للتسميع =======================
-    // ======================= استبدل دالة assignTashmi بهذا الكود =======================
-    async function assignTashmi(recordId) {
-        // العثور على الزر المضغوط داخل البطاقة نفسها
-        const card = document.querySelector(`.card[data-id="${recordId}"]`);
-        if (!card) {
-            console.error('البطاقة غير موجودة');
-            return;
-        }
-        const btn = card.querySelector('.assign-btn');
-        if (!btn) {
-            console.error('زر التولي غير موجود');
-            return;
-        }
-
-        // تعطيل الزر وتغيير النص
-        btn.disabled = true;
-        btn.textContent = '⏳ جاري...';
-
-        try {
-            const res = await fetch(`${BASE_URL}/tashmi/assign`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ record_id: recordId, admin_id: adminId })
-            });
-            const data = await res.json();
-
-            if (!res.ok) {
-                // في حالة فشل الطلب، نعيد تمكين الزر مع رسالة الخطأ
-                alert(`❌ فشل تولي التصحيح: ${data.error || 'خطأ غير معروف'}`);
-                btn.disabled = false;
-                btn.textContent = '🔄 تولي التصحيح';
-                return;
-            }
-
-            // في حالة النجاح، نعيد تحميل التسميعات (ستُعاد بناء الواجهة)
-            loadTashmiGroups();
-
-        } catch (e) {
-            // في حالة خطأ في الشبكة أو استثناء
-            alert(`❌ خطأ في الاتصال: ${e.message}`);
-            btn.disabled = false;
-            btn.textContent = '🔄 تولي التصحيح';
-        }
-    }
-
-    async function unassignTashmi(recordId) {
-        alert('سيتم إلغاء التولي تلقائياً بعد 15 دقيقة، أو يمكن للمشرف الآخر توليها.');
-        loadTashmiGroups();
-    }
-
-    async function sendTashmiReply(recordId) {
-        const textarea = document.getElementById(`tnote-${recordId}`);
-        const note = textarea.value.trim();
-        if (!note) { alert('الرجاء كتابة الملاحظة'); return; }
-        const btn = textarea.nextElementSibling;
-        btn.disabled = true; btn.textContent = '⏳ جاري...';
-        try {
-            const res = await fetch(`${BASE_URL}/tashmi/reply`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ record_id: recordId, note_text: note, admin_id: adminId })
-            });
-            if (!res.ok) throw new Error((await res.json()).error || 'فشل');
-            loadTashmiGroups();
-        } catch(e) { alert(`❌ ${e.message}`); btn.disabled = false; btn.textContent = '📤 إرسال الملاحظة'; }
     }
 
     // ======================= دوال الاستفسارات القديمة =======================
