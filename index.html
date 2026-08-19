@@ -168,6 +168,7 @@
         return `👤 <a href="https://t.me/${username}" target="_blank">${username}</a>`;
     }
 
+    // ======================= استبدل دالة loadQuestions =======================
     async function loadQuestions() {
         console.log('🔄 loadQuestions بدأت');
         const container = document.getElementById('questions-container');
@@ -182,7 +183,7 @@
             });
             if (!res.ok) throw new Error((await res.json()).error || 'فشل');
             const data = await res.json();
-            currentQuestions = data;
+            currentQuestions = data; // تحديث المتغير العام
             document.getElementById('pendingCount').textContent = data.filter(q => q.status === 'pending').length;
             document.getElementById('processingCount').textContent = data.filter(q => q.status === 'processing').length;
             document.getElementById('answeredCount').textContent = data.filter(q => q.status === 'answered').length;
@@ -532,123 +533,162 @@
         } catch(e){ alert(e.message); }
     }
 
+    // ======================= استبدل دالة sendTashmiReply =======================
     async function sendTashmiReply(recordId) {
-        const textarea = document.getElementById(`tnote-${recordId}`);
+        console.log('📤 محاولة إرسال ملاحظة على التسميع:', recordId);
+        const card = document.querySelector(`.card[data-id="${recordId}"]`);
+        if (!card) {
+            console.error('❌ البطاقة غير موجودة');
+            return;
+        }
+        const textarea = card.querySelector('.reply-area');
         if (!textarea) {
-            // محاولة إيجاد الحقل داخل البطاقة
-            const card = document.querySelector(`.card[data-id="${recordId}"]`);
-            if (card) {
-                const ta = card.querySelector('.reply-area');
-                if (ta) {
-                    const note = ta.value.trim();
-                    if (!note) { alert('الرجاء كتابة الملاحظة'); return; }
-                    const btn = card.querySelector('.send-btn');
-                    btn.disabled = true; btn.textContent = '⏳ جاري...';
-                    try {
-                        const res = await fetch(`${BASE_URL}/tashmi/reply`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ record_id: recordId, note_text: note, admin_id: adminId })
-                        });
-                        if (!res.ok) throw new Error((await res.json()).error || 'فشل');
-                        alert('✅ تم إرسال الملاحظة بنجاح');
-                        // تحديث البطاقة إلى حالة "تم الرد"
-                        const badge = card.querySelector('.processing-badge, .tashmi-badge, .pending-badge');
-                        if (badge) {
-                            badge.className = 'answered-badge';
-                            badge.textContent = '✅ تم الرد';
-                        }
-                        const actionsDiv = card.querySelector('.actions');
-                        if (actionsDiv) actionsDiv.innerHTML = '';
-                        const ta2 = card.querySelector('.reply-area');
-                        if (ta2) ta2.disabled = true;
-                        const btn2 = card.querySelector('.send-btn');
-                        if (btn2) btn2.disabled = true;
-                        // تحديث الإحصائيات
-                        const processingSpan = document.getElementById('tashmiProcessingCount') || document.getElementById('tashmiPendingCount');
-                        // لا توجد إحصائيات للـ processing في التسميع حالياً، نكتفي بتحديث pending
-                        loadTashmiGroups(); // تحديث القائمة بالكامل لضمان التزامن
-                    } catch(e) { alert(`❌ ${e.message}`); btn.disabled = false; btn.textContent = '📤 إرسال الملاحظة'; }
-                }
-            }
+            console.error('❌ حقل الملاحظة غير موجود');
             return;
         }
         const note = textarea.value.trim();
-        if (!note) { alert('الرجاء كتابة الملاحظة'); return; }
-        const btn = textarea.nextElementSibling;
-        btn.disabled = true; btn.textContent = '⏳ جاري...';
-        try {
-            const res = await fetch(`${BASE_URL}/tashmi/reply`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ record_id: recordId, note_text: note, admin_id: adminId })
-            });
-            if (!res.ok) throw new Error((await res.json()).error || 'فشل');
-            alert('✅ تم إرسال الملاحظة بنجاح');
-            loadTashmiGroups(); // تحديث القائمة بالكامل بعد الرد
-        } catch(e) { alert(`❌ ${e.message}`); btn.disabled = false; btn.textContent = '📤 إرسال الملاحظة'; }
+        if (!note) {
+            alert('الرجاء كتابة الملاحظة');
+            return;
+        }
+        const btn = card.querySelector('.send-btn');
+        if (!btn) {
+            console.error('❌ زر الإرسال غير موجود');
+            return;
+        }
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
+        
+        const send = async (retry = false) => {
+            try {
+                const res = await fetch(`${BASE_URL}/tashmi/reply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ record_id: recordId, note_text: note, admin_id: adminId })
+                });
+                const data = await res.json();
+                console.log('📥 استجابة /tashmi/reply:', data);
+                if (data.error || !res.ok) {
+                    throw new Error(data.error || 'فشل الإرسال');
+                }
+                console.log('✅ تم إرسال الملاحظة بنجاح');
+                alert('✅ تم إرسال الملاحظة بنجاح');
+                // تحديث البطاقة محلياً
+                const badge = card.querySelector('.processing-badge, .tashmi-badge, .pending-badge');
+                if (badge) {
+                    badge.className = 'answered-badge';
+                    badge.textContent = '✅ تم الرد';
+                }
+                const actionsDiv = card.querySelector('.actions');
+                if (actionsDiv) actionsDiv.innerHTML = '';
+                textarea.disabled = true;
+                btn.disabled = true;
+                btn.textContent = '✅ تم الإرسال';
+                // تحديث الإحصائيات (تقليل pending)
+                const pendingSpan = document.getElementById('tashmiPendingCount');
+                if (pendingSpan) {
+                    let current = parseInt(pendingSpan.textContent) || 0;
+                    if (current > 0) pendingSpan.textContent = current - 1;
+                }
+                // تحديث القائمة بالكامل بعد الرد (للتزامن)
+                loadTashmiGroups();
+            } catch(e) {
+                console.error('❌ فشل الإرسال:', e.message);
+                if (e.message.includes('Event loop is closed') && !retry) {
+                    console.log('🔄 محاولة إعادة الإرسال بعد 500ms...');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await send(true);
+                    return;
+                }
+                alert(`❌ فشل الإرسال: ${e.message}`);
+                btn.disabled = false;
+                btn.textContent = '📤 إرسال الملاحظة';
+            }
+        };
+        
+        await send();
     }
 
+    // ======================= استبدل دالة sendReply =======================
     async function sendReply(qId) {
-        const textarea = document.getElementById(`reply-${qId}`);
+        console.log('📤 محاولة إرسال رد على السؤال:', qId);
+        const card = document.querySelector(`.card[data-id="${qId}"]`);
+        if (!card) {
+            console.error('❌ البطاقة غير موجودة');
+            return;
+        }
+        const textarea = card.querySelector('.reply-area');
         if (!textarea) {
-            const card = document.querySelector(`.card[data-id="${qId}"]`);
-            if (card) {
-                const ta = card.querySelector('.reply-area');
-                if (ta) {
-                    const reply = ta.value.trim();
-                    if (!reply) { alert('اكتب الرد'); return; }
-                    const btn = card.querySelector('.send-btn');
-                    btn.disabled = true; btn.textContent = '⏳...';
-                    try {
-                        const res = await fetch(`${BASE_URL}/reply`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ question_id: qId, reply_text: reply, admin_id: adminId })
-                        });
-                        if (!res.ok) throw new Error((await res.json()).error);
-                        alert('✅ تم إرسال الرد بنجاح');
-                        const badge = card.querySelector('.processing-badge');
-                        if (badge) {
-                            badge.className = 'answered-badge';
-                            badge.textContent = '✅ تم الرد';
-                        }
-                        const actionsDiv = card.querySelector('.actions');
-                        if (actionsDiv) actionsDiv.innerHTML = '';
-                        const ta2 = card.querySelector('.reply-area');
-                        if (ta2) ta2.disabled = true;
-                        const btn2 = card.querySelector('.send-btn');
-                        if (btn2) btn2.disabled = true;
-                        // تحديث الإحصائيات
-                        const answeredSpan = document.getElementById('answeredCount');
-                        if (answeredSpan) {
-                            let current = parseInt(answeredSpan.textContent) || 0;
-                            answeredSpan.textContent = current + 1;
-                        }
-                        const processingSpan = document.getElementById('processingCount');
-                        if (processingSpan) {
-                            let current = parseInt(processingSpan.textContent) || 0;
-                            if (current > 0) processingSpan.textContent = current - 1;
-                        }
-                        loadQuestions(); // تحديث القائمة بالكامل بعد الرد
-                    } catch(e) { alert(`❌ ${e.message}`); btn.disabled = false; btn.textContent = '📤 إرسال الرد'; }
-                }
-            }
+            console.error('❌ حقل الرد غير موجود');
             return;
         }
         const reply = textarea.value.trim();
-        if (!reply) { alert('اكتب الرد'); return; }
-        const btn = textarea.nextElementSibling; btn.disabled = true; btn.textContent = '⏳...';
-        try {
-            const res = await fetch(`${BASE_URL}/reply`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question_id: qId, reply_text: reply, admin_id: adminId })
-            });
-            if (!res.ok) throw new Error((await res.json()).error);
-            alert('✅ تم إرسال الرد بنجاح');
-            loadQuestions();
-        } catch(e){ alert(e.message); btn.disabled = false; btn.textContent = '📤 إرسال الرد'; }
+        if (!reply) {
+            alert('اكتب الرد');
+            return;
+        }
+        const btn = card.querySelector('.send-btn');
+        if (!btn) {
+            console.error('❌ زر الإرسال غير موجود');
+            return;
+        }
+        btn.disabled = true;
+        btn.textContent = '⏳ جاري...';
+        
+        const send = async (retry = false) => {
+            try {
+                const res = await fetch(`${BASE_URL}/reply`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question_id: qId, reply_text: reply, admin_id: adminId })
+                });
+                const data = await res.json();
+                console.log('📥 استجابة /reply:', data);
+                if (data.error || !res.ok) {
+                    throw new Error(data.error || 'فشل الإرسال');
+                }
+                // نجاح
+                console.log('✅ تم إرسال الرد بنجاح');
+                alert('✅ تم إرسال الرد بنجاح');
+                // تحديث البطاقة محلياً
+                const badge = card.querySelector('.processing-badge, .pending-badge');
+                if (badge) {
+                    badge.className = 'answered-badge';
+                    badge.textContent = '✅ تم الرد';
+                }
+                const actionsDiv = card.querySelector('.actions');
+                if (actionsDiv) actionsDiv.innerHTML = '';
+                textarea.disabled = true;
+                btn.disabled = true;
+                btn.textContent = '✅ تم الإرسال';
+                // تحديث الإحصائيات
+                const answeredSpan = document.getElementById('answeredCount');
+                if (answeredSpan) {
+                    let current = parseInt(answeredSpan.textContent) || 0;
+                    answeredSpan.textContent = current + 1;
+                }
+                const processingSpan = document.getElementById('processingCount');
+                if (processingSpan) {
+                    let current = parseInt(processingSpan.textContent) || 0;
+                    if (current > 0) processingSpan.textContent = current - 1;
+                }
+                // تحديث القائمة بالكامل بعد الرد (للتزامن)
+                loadQuestions();
+            } catch(e) {
+                console.error('❌ فشل الإرسال:', e.message);
+                if (e.message.includes('Event loop is closed') && !retry) {
+                    console.log('🔄 محاولة إعادة الإرسال بعد 500ms...');
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await send(true);
+                    return;
+                }
+                alert(`❌ فشل الإرسال: ${e.message}`);
+                btn.disabled = false;
+                btn.textContent = '📤 إرسال الرد';
+            }
+        };
+        
+        await send();
     }
 
     async function deleteAnswered() {
