@@ -286,7 +286,7 @@
         renderTashmiRecords(filtered);
     }
 
-    // ✅ دالة عرض التسميعات مع زر تحميل الصوت
+    // ✅ دالة عرض التسميعات المعدلة (تستخدم getAudioUrl)
     function renderTashmiRecords(records) {
         const container = document.getElementById('tashmi-container');
         if (records.length === 0) {
@@ -307,20 +307,19 @@
                 const isMyProcessing = isProcessing && isAssignedToMe;
                 badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="tashmi-badge">⏳ في الانتظار</span>';
                 const audioId = `audio-${r.id}`;
+                // ✅ استخدام getAudioUrl للحصول على الرابط الصحيح
+                const audioSrc = getAudioUrl(r.voice_file_id);
                 const durationText = (r.duration && r.duration > 0) ? `⏱️ ${Math.floor(r.duration/60)}:${(r.duration%60).toString().padStart(2,'0')}` : '⏱️ المدة غير معروفة';
                 contentHtml = `
                     <div class="audio-player-wrapper">
-                        <audio controls preload="none" id="${audioId}">
-                            <source src="" type="audio/mp4">
-                            <source src="" type="audio/mpeg">
+                        <audio controls preload="metadata" id="${audioId}">
+                            <source src="${audioSrc}" type="audio/mp4">
+                            <source src="${audioSrc}" type="audio/mpeg">
+                            <source src="${audioSrc}">
                             المتصفح لا يدعم تشغيل الصوت.
                         </audio>
                         <div style="font-size:12px;color:#7f8c8d;margin-top:4px;">${durationText}</div>
-                        <button class="speed-btn" style="background:#2ecc71;color:white;border:none;padding:4px 12px;border-radius:12px;cursor:pointer;margin-top:4px;transition:0.2s;" 
-                                onclick="loadAudio('${audioId}', '${r.voice_file_id}')">
-                            ▶️ تحميل الصوت
-                        </button>
-                        <div class="speed-btns" style="margin-top:6px;">
+                        <div class="speed-btns">
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 1)">1x</button>
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 1.5)">1.5x</button>
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 2)">2x</button>
@@ -340,84 +339,27 @@
         container.innerHTML = html;
     }
 
-    // ✅ دالة تحميل الصوت مع مؤشر التحميل
-    async function loadAudio(audioId, fileId) {
-        const audio = document.getElementById(audioId);
-        if (!audio) return;
-        const source = audio.querySelector('source');
-        if (!source) return;
-
-        // إذا كان الصوت محملاً مسبقاً، لا نعيد التحميل
-        if (source.src && source.src !== '' && source.src !== window.location.href) {
-            return;
-        }
-
-        const parent = audio.closest('.audio-player-wrapper');
-        if (!parent) return;
-        const loadBtn = parent.querySelector('button[onclick^="loadAudio"]');
-        if (!loadBtn) return;
-
-        // تغيير نص الزر إلى "⏳ جاري التحميل..."
-        const originalText = loadBtn.textContent;
-        loadBtn.textContent = '⏳ جاري التحميل...';
-        loadBtn.disabled = true;
-        loadBtn.style.opacity = '0.7';
-
-        try {
-            const url = await getAudioUrl(fileId);
-            if (!url) throw new Error('الرابط فارغ');
-
-            source.src = url;
-            audio.load();
-
-            // محاولة تشغيل الصوت تلقائيًا
-            try {
-                await audio.play();
-            } catch (e) {
-                console.log('التشغيل التلقائي غير مسموح');
-            }
-
-            // إخفاء زر التحميل بعد النجاح
-            loadBtn.style.display = 'none';
-
-            // تحديث المدة عند تحميل البيانات
-            audio.addEventListener('loadedmetadata', function() {
-                const duration = audio.duration;
-                if (duration && !isNaN(duration)) {
-                    const minutes = Math.floor(duration / 60);
-                    const seconds = Math.floor(duration % 60);
-                    const durationText = `⏱️ ${minutes}:${seconds.toString().padStart(2, '0')}`;
-                    const durationDiv = parent.querySelector('div[style*="font-size:12px;color:#7f8c8d;"]');
-                    if (durationDiv) {
-                        durationDiv.textContent = durationText;
-                    }
-                }
-            });
-
-        } catch (e) {
-            alert('❌ فشل تحميل الصوت: ' + e.message);
-            console.error(e);
-            loadBtn.textContent = originalText || '▶️ تحميل الصوت';
-            loadBtn.disabled = false;
-            loadBtn.style.opacity = '1';
-        }
-    }
-
     // ✅ دالة جلب رابط الصوت من الخادم
-    async function getAudioUrl(fileId) {
-        if (!fileId) throw new Error('معرف الملف فارغ');
-        const res = await fetch(`${BASE_URL}/get_audio_url`, {
+    function getAudioUrl(fileId) {
+        // نستخدم fetch داخل دالة غير متزامنة، ولكن renderTashmiRecords ليست async
+        // لذا سنستخدم then/catch أو نعيد الوعد (Promise)
+        return fetch(`${BASE_URL}/get_audio_url`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ file_id: fileId, admin_id: adminId })
+        })
+        .then(res => {
+            if (!res.ok) throw new Error('فشل جلب الرابط');
+            return res.json();
+        })
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+            return data.url;
+        })
+        .catch(err => {
+            console.error('خطأ في جلب الصوت:', err);
+            return ''; // يعيد رابط فارغ في حالة الفشل
         });
-        if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || 'فشل جلب الرابط');
-        }
-        const data = await res.json();
-        if (data.error) throw new Error(data.error);
-        return data.url;
     }
 
     function setSpeed(audioId, rate) {
