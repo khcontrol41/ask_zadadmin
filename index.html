@@ -183,7 +183,8 @@
             });
             if (!res.ok) throw new Error((await res.json()).error || 'فشل');
             const data = await res.json();
-            currentQuestions = data; // تحديث المتغير العام
+            console.log('📥 تم جلب البيانات:', data.length, 'استفسار');
+            currentQuestions = data;
             document.getElementById('pendingCount').textContent = data.filter(q => q.status === 'pending').length;
             document.getElementById('processingCount').textContent = data.filter(q => q.status === 'processing').length;
             document.getElementById('answeredCount').textContent = data.filter(q => q.status === 'answered').length;
