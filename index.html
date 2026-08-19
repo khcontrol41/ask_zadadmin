@@ -244,7 +244,7 @@
         finally { refreshBtn.disabled = false; }
     }
 
-    // ======================= دوال التسميع =======================
+    // ======================= دوال التسميع (مع دعم الصوتيات) =======================
     async function loadTashmiGroups() {
         const container = document.getElementById('tashmi-container');
         const refreshBtn = document.getElementById('refreshBtn');
@@ -272,22 +272,22 @@
                 groupsHtml += `<button class="group-tab" data-group="${g}" onclick="switchGroup('${g}')">🎯 مجموعة ${g} <span class="badge ${count === 0 ? 'zero' : ''}">${count}</span></button>`;
             });
             groupsContainer.innerHTML = groupsHtml;
-            renderTashmiRecords(data.filter(r => r.group_number === currentGroup || currentGroup === 'all'));
+            await renderTashmiRecords(data.filter(r => r.group_number === currentGroup || currentGroup === 'all'));
         } catch(e) { container.innerHTML = `<div class="error">❌ ${e.message}</div>`; }
         finally { refreshBtn.disabled = false; }
     }
 
-    function switchGroup(groupId) {
+    async function switchGroup(groupId) {
         currentGroup = groupId;
         document.querySelectorAll('.group-tab').forEach(btn => btn.classList.remove('active'));
         const activeBtn = document.querySelector(`.group-tab[data-group="${groupId}"]`);
         if (activeBtn) activeBtn.classList.add('active');
         const filtered = currentGroup === 'all' ? currentTashmiRecords : currentTashmiRecords.filter(r => r.group_number === currentGroup);
-        renderTashmiRecords(filtered);
+        await renderTashmiRecords(filtered);
     }
 
-    // ✅ دالة عرض التسميعات المعدلة (تستخدم getAudioUrl)
-    function renderTashmiRecords(records) {
+    // ✅ الدالة المعدلة: تستخدم getAudioUrl للحصول على رابط الصوت الصحيح
+    async function renderTashmiRecords(records) {
         const container = document.getElementById('tashmi-container');
         if (records.length === 0) {
             container.innerHTML = '<div class="loader" style="color:#27ae60;">🎙️ لا توجد تسميعات في هذه المجموعة</div>';
@@ -307,18 +307,22 @@
                 const isMyProcessing = isProcessing && isAssignedToMe;
                 badge = isMyProcessing ? '<span class="processing-badge">🔄 أنت تعالج</span>' : '<span class="tashmi-badge">⏳ في الانتظار</span>';
                 const audioId = `audio-${r.id}`;
-                // ✅ استخدام getAudioUrl للحصول على الرابط الصحيح
-                const audioSrc = getAudioUrl(r.voice_file_id);
-                const durationText = (r.duration && r.duration > 0) ? `⏱️ ${Math.floor(r.duration/60)}:${(r.duration%60).toString().padStart(2,'0')}` : '⏱️ المدة غير معروفة';
+                // استخدام getAudioUrl للحصول على الرابط الصحيح
+                let audioSrc = '';
+                try {
+                    audioSrc = await getAudioUrl(r.voice_file_id);
+                } catch(e) {
+                    console.error('فشل جلب رابط الصوت:', e);
+                    audioSrc = '';
+                }
                 contentHtml = `
                     <div class="audio-player-wrapper">
-                        <audio controls preload="metadata" id="${audioId}">
+                        <audio controls id="${audioId}">
                             <source src="${audioSrc}" type="audio/mp4">
                             <source src="${audioSrc}" type="audio/mpeg">
                             <source src="${audioSrc}">
                             المتصفح لا يدعم تشغيل الصوت.
                         </audio>
-                        <div style="font-size:12px;color:#7f8c8d;margin-top:4px;">${durationText}</div>
                         <div class="speed-btns">
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 1)">1x</button>
                             <button class="speed-btn" onclick="setSpeed('${audioId}', 1.5)">1.5x</button>
@@ -339,27 +343,21 @@
         container.innerHTML = html;
     }
 
-    // ✅ دالة جلب رابط الصوت من الخادم
-    function getAudioUrl(fileId) {
-        // نستخدم fetch داخل دالة غير متزامنة، ولكن renderTashmiRecords ليست async
-        // لذا سنستخدم then/catch أو نعيد الوعد (Promise)
-        return fetch(`${BASE_URL}/get_audio_url`, {
+    // ✅ الدالة الجديدة: تجلب رابط الصوت من الخادم
+    async function getAudioUrl(fileId) {
+        if (!fileId) return '';
+        const res = await fetch(`${BASE_URL}/get_audio_url`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ file_id: fileId, admin_id: adminId })
-        })
-        .then(res => {
-            if (!res.ok) throw new Error('فشل جلب الرابط');
-            return res.json();
-        })
-        .then(data => {
-            if (data.error) throw new Error(data.error);
-            return data.url;
-        })
-        .catch(err => {
-            console.error('خطأ في جلب الصوت:', err);
-            return ''; // يعيد رابط فارغ في حالة الفشل
         });
+        if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.error || 'فشل جلب الرابط');
+        }
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        return data.url;
     }
 
     function setSpeed(audioId, rate) {
